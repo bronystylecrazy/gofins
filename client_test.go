@@ -225,3 +225,293 @@ func TestContextWithTimeout(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, toWrite, vals)
 }
+
+func TestBitOperations(t *testing.T) {
+	ctx := context.Background()
+	clientAddr, plcAddr := getTestAddresses(t)
+
+	s, e := NewPLCSimulator(plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer s.Close()
+
+	c, e := NewClient(clientAddr, plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer c.Close()
+
+	// Test SetBit
+	err := c.SetBit(ctx, MemoryAreaDMBit, 50, 3)
+	assert.Nil(t, err)
+
+	// Verify bit is set
+	bits, err := c.ReadBits(ctx, MemoryAreaDMBit, 50, 3, 1)
+	assert.Nil(t, err)
+	assert.True(t, bits[0])
+
+	// Test ResetBit
+	err = c.ResetBit(ctx, MemoryAreaDMBit, 50, 3)
+	assert.Nil(t, err)
+
+	// Verify bit is reset
+	bits, err = c.ReadBits(ctx, MemoryAreaDMBit, 50, 3, 1)
+	assert.Nil(t, err)
+	assert.False(t, bits[0])
+
+	// Test ToggleBit - from false to true
+	err = c.ToggleBit(ctx, MemoryAreaDMBit, 50, 3)
+	assert.Nil(t, err)
+
+	bits, err = c.ReadBits(ctx, MemoryAreaDMBit, 50, 3, 1)
+	assert.Nil(t, err)
+	assert.True(t, bits[0])
+
+	// Test ToggleBit - from true to false
+	err = c.ToggleBit(ctx, MemoryAreaDMBit, 50, 3)
+	assert.Nil(t, err)
+
+	bits, err = c.ReadBits(ctx, MemoryAreaDMBit, 50, 3, 1)
+	assert.Nil(t, err)
+	assert.False(t, bits[0])
+}
+
+func TestSetByteOrder(t *testing.T) {
+	ctx := context.Background()
+	clientAddr, plcAddr := getTestAddresses(t)
+
+	s, e := NewPLCSimulator(plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer s.Close()
+
+	c, e := NewClient(clientAddr, plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer c.Close()
+
+	// Test with LittleEndian
+	c.SetByteOrder(binary.LittleEndian)
+
+	toWrite := []uint16{0x1234}
+	err := c.WriteWords(ctx, MemoryAreaDMWord, 300, toWrite)
+	assert.Nil(t, err)
+
+	vals, err := c.ReadWords(ctx, MemoryAreaDMWord, 300, 1)
+	assert.Nil(t, err)
+	assert.Equal(t, toWrite, vals)
+
+	// Test with BigEndian (default)
+	c.SetByteOrder(binary.BigEndian)
+
+	toWrite2 := []uint16{0x5678}
+	err = c.WriteWords(ctx, MemoryAreaDMWord, 301, toWrite2)
+	assert.Nil(t, err)
+
+	vals2, err := c.ReadWords(ctx, MemoryAreaDMWord, 301, 1)
+	assert.Nil(t, err)
+	assert.Equal(t, toWrite2, vals2)
+}
+
+func TestSetReadTimeout(t *testing.T) {
+	ctx := context.Background()
+	clientAddr, plcAddr := getTestAddresses(t)
+
+	s, e := NewPLCSimulator(plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer s.Close()
+
+	c, e := NewClient(clientAddr, plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer c.Close()
+
+	// Set custom read timeout
+	c.SetReadTimeout(10 * time.Second)
+
+	// Should still work normally
+	toWrite := []uint16{99}
+	err := c.WriteWords(ctx, MemoryAreaDMWord, 400, toWrite)
+	assert.Nil(t, err)
+
+	vals, err := c.ReadWords(ctx, MemoryAreaDMWord, 400, 1)
+	assert.Nil(t, err)
+	assert.Equal(t, toWrite, vals)
+}
+
+func TestInvalidMemoryAreas(t *testing.T) {
+	ctx := context.Background()
+	clientAddr, plcAddr := getTestAddresses(t)
+
+	s, e := NewPLCSimulator(plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer s.Close()
+
+	c, e := NewClient(clientAddr, plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer c.Close()
+
+	// Try to read words from bit area
+	_, err := c.ReadWords(ctx, MemoryAreaDMBit, 100, 5)
+	assert.Error(t, err)
+	assert.IsType(t, IncompatibleMemoryAreaError{}, err)
+
+	// Try to write words to bit area
+	err = c.WriteWords(ctx, MemoryAreaDMBit, 100, []uint16{1, 2, 3})
+	assert.Error(t, err)
+	assert.IsType(t, IncompatibleMemoryAreaError{}, err)
+
+	// Try to read bits from word area
+	_, err = c.ReadBits(ctx, MemoryAreaDMWord, 100, 0, 5)
+	assert.Error(t, err)
+	assert.IsType(t, IncompatibleMemoryAreaError{}, err)
+
+	// Try to write bits to word area
+	err = c.WriteBits(ctx, MemoryAreaDMWord, 100, 0, []bool{true, false})
+	assert.Error(t, err)
+	assert.IsType(t, IncompatibleMemoryAreaError{}, err)
+
+	// Try SetBit on word area
+	err = c.SetBit(ctx, MemoryAreaDMWord, 100, 0)
+	assert.Error(t, err)
+	assert.IsType(t, IncompatibleMemoryAreaError{}, err)
+}
+
+func TestErrorMessages(t *testing.T) {
+	// Test ResponseTimeoutError
+	err := ResponseTimeoutError{duration: 100 * time.Millisecond}
+	assert.Contains(t, err.Error(), "100")
+	assert.Contains(t, err.Error(), "timeout")
+
+	// Test IncompatibleMemoryAreaError
+	err2 := IncompatibleMemoryAreaError{area: 0x82}
+	assert.Contains(t, err2.Error(), "0x82")
+	assert.Contains(t, err2.Error(), "incompatible")
+
+	// Test ClientClosedError
+	err3 := ClientClosedError{}
+	assert.Contains(t, err3.Error(), "closed")
+
+	// Test BCDBadDigitError
+	err4 := BCDBadDigitError{v: "hi", val: 15}
+	assert.Contains(t, err4.Error(), "hi")
+	assert.Contains(t, err4.Error(), "15")
+
+	// Test BCDOverflowError
+	err5 := BCDOverflowError{}
+	assert.Contains(t, err5.Error(), "Overflow")
+}
+
+func TestNewLocalAddress(t *testing.T) {
+	addr := NewLocalAddress(0, 5, 0)
+	assert.Equal(t, byte(0), addr.FinAddress.Network)
+	assert.Equal(t, byte(5), addr.FinAddress.Node)
+	assert.Equal(t, byte(0), addr.FinAddress.Unit)
+	assert.Nil(t, addr.UdpAddress)
+}
+
+func TestServerErr(t *testing.T) {
+	_, plcAddr := getTestAddresses(t)
+
+	s, e := NewPLCSimulator(plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer s.Close()
+
+	// Get error channel
+	errChan := s.Err()
+	assert.NotNil(t, errChan)
+
+	// Verify no errors initially
+	select {
+	case err := <-errChan:
+		t.Fatalf("Unexpected error: %v", err)
+	case <-time.After(10 * time.Millisecond):
+		// Good, no errors
+	}
+}
+
+func TestResponseTimeout(t *testing.T) {
+	ctx := context.Background()
+	clientAddr, plcAddr := getTestAddresses(t)
+
+	// Don't create server - client will timeout
+	c, e := NewClient(clientAddr, plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer c.Close()
+
+	// Set very short timeout
+	c.SetTimeoutMs(10)
+
+	// This should timeout since there's no server
+	_, err := c.ReadWords(ctx, MemoryAreaDMWord, 100, 5)
+	assert.Error(t, err)
+	// Should be either timeout or other network error
+	assert.NotNil(t, err)
+}
+
+func TestDoubleClose(t *testing.T) {
+	ctx := context.Background()
+	clientAddr, plcAddr := getTestAddresses(t)
+
+	s, e := NewPLCSimulator(plcAddr)
+	if e != nil {
+		panic(e)
+	}
+
+	c, e := NewClient(clientAddr, plcAddr)
+	if e != nil {
+		panic(e)
+	}
+
+	// First close
+	err := c.Close()
+	assert.Nil(t, err)
+
+	// Second close should not error
+	err = c.Close()
+	assert.Nil(t, err)
+
+	// Same for server
+	err = s.Close()
+	assert.Nil(t, err)
+
+	err = s.Close()
+	assert.Nil(t, err)
+
+	// Operations after close should fail
+	_, err = c.ReadWords(ctx, MemoryAreaDMWord, 100, 5)
+	assert.Error(t, err)
+	assert.IsType(t, ClientClosedError{}, err)
+}
+
+func TestMemoryAreaChecks(t *testing.T) {
+	// Test checkIsWordMemoryArea with all valid areas
+	assert.True(t, checkIsWordMemoryArea(MemoryAreaDMWord))
+	assert.True(t, checkIsWordMemoryArea(MemoryAreaARWord))
+	assert.True(t, checkIsWordMemoryArea(MemoryAreaHRWord))
+	assert.True(t, checkIsWordMemoryArea(MemoryAreaWRWord))
+	assert.False(t, checkIsWordMemoryArea(MemoryAreaDMBit))
+	assert.False(t, checkIsWordMemoryArea(0xFF))
+
+	// Test checkIsBitMemoryArea with all valid areas
+	assert.True(t, checkIsBitMemoryArea(MemoryAreaDMBit))
+	assert.True(t, checkIsBitMemoryArea(MemoryAreaARBit))
+	assert.True(t, checkIsBitMemoryArea(MemoryAreaHRBit))
+	assert.True(t, checkIsBitMemoryArea(MemoryAreaWRBit))
+	assert.False(t, checkIsBitMemoryArea(MemoryAreaDMWord))
+	assert.False(t, checkIsBitMemoryArea(0xFF))
+}

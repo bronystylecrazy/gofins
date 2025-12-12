@@ -78,7 +78,10 @@ func (c *Client) SetTimeoutMs(t uint) {
 // SetReadTimeout sets the UDP read timeout.
 // Default value: 5s.
 // This timeout helps ensure graceful shutdown.
+// Note: This should be called before starting operations for thread safety.
 func (c *Client) SetReadTimeout(t time.Duration) {
+	c.closeMutex.Lock()
+	defer c.closeMutex.Unlock()
 	c.readTimeout = t
 }
 
@@ -405,8 +408,12 @@ func (c *Client) listenLoop() {
 
 	for {
 		// Set read deadline for graceful shutdown
-		if c.readTimeout > 0 {
-			c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+		c.closeMutex.RLock()
+		timeout := c.readTimeout
+		c.closeMutex.RUnlock()
+
+		if timeout > 0 {
+			c.conn.SetReadDeadline(time.Now().Add(timeout))
 		}
 
 		n, err := reader.Read(buf)
