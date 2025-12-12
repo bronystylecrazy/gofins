@@ -3,6 +3,7 @@ package fins
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"net"
 	"testing"
@@ -692,4 +693,195 @@ func TestWaitForConnectionReturnsOnClientClose(t *testing.T) {
 	_, err := c.ReadWords(ctx, MemoryAreaDMWord, 100, 5)
 	assert.Error(t, err)
 	assert.IsType(t, ClientClosedError{}, err)
+}
+
+func TestInterceptorBasic(t *testing.T) {
+	ctx := context.Background()
+	clientAddr, plcAddr := getTestAddresses(t)
+
+	s, e := NewPLCSimulator(plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer s.Close()
+
+	c, e := NewClient(clientAddr, plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer c.Close()
+
+	// Track interceptor calls
+	var calls []OperationType
+	c.SetInterceptor(func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+		calls = append(calls, info.Operation)
+		return invoker(ctx)
+	})
+
+	// Perform operations
+	toWrite := []uint16{1, 2, 3}
+	err := c.WriteWords(ctx, MemoryAreaDMWord, 100, toWrite)
+	assert.Nil(t, err)
+
+	_, err = c.ReadWords(ctx, MemoryAreaDMWord, 100, 3)
+	assert.Nil(t, err)
+
+	// Verify interceptor was called
+	assert.Equal(t, 2, len(calls))
+	assert.Equal(t, OpWriteWords, calls[0])
+	assert.Equal(t, OpReadWords, calls[1])
+}
+
+func TestInterceptorMetrics(t *testing.T) {
+	ctx := context.Background()
+	clientAddr, plcAddr := getTestAddresses(t)
+
+	s, e := NewPLCSimulator(plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer s.Close()
+
+	c, e := NewClient(clientAddr, plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer c.Close()
+
+	// Set up metrics collector
+	metrics := NewMetricsCollector()
+	c.SetInterceptor(metrics.Interceptor())
+
+	// Perform operations
+	toWrite := []uint16{1, 2, 3}
+	c.WriteWords(ctx, MemoryAreaDMWord, 100, toWrite)
+	c.ReadWords(ctx, MemoryAreaDMWord, 100, 3)
+	c.ReadWords(ctx, MemoryAreaDMWord, 200, 5)
+
+	// Check metrics
+	readCount, _, _ := metrics.GetStats(OpReadWords)
+	assert.Equal(t, int64(2), readCount)
+
+	writeCount, _, _ := metrics.GetStats(OpWriteWords)
+	assert.Equal(t, int64(1), writeCount)
+}
+
+func TestInterceptorChaining(t *testing.T) {
+	ctx := context.Background()
+	clientAddr, plcAddr := getTestAddresses(t)
+
+	s, e := NewPLCSimulator(plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer s.Close()
+
+	c, e := NewClient(clientAddr, plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer c.Close()
+
+	// Track execution order
+	var order []string
+
+	interceptor1 := func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+		order = append(order, "interceptor1-before")
+		result, err := invoker(ctx)
+		order = append(order, "interceptor1-after")
+		return result, err
+	}
+
+	interceptor2 := func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+		order = append(order, "interceptor2-before")
+		result, err := invoker(ctx)
+		order = append(order, "interceptor2-after")
+		return result, err
+	}
+
+	// Chain interceptors
+	c.SetInterceptor(ChainInterceptors(interceptor1, interceptor2))
+
+	// Perform operation
+	toWrite := []uint16{1, 2, 3}
+	c.WriteWords(ctx, MemoryAreaDMWord, 100, toWrite)
+
+	// Verify execution order
+	assert.Equal(t, []string{
+		"interceptor1-before",
+		"interceptor2-before",
+		"interceptor2-after",
+		"interceptor1-after",
+	}, order)
+}
+
+func TestInterceptorCanShortCircuit(t *testing.T) {
+	ctx := context.Background()
+	clientAddr, plcAddr := getTestAddresses(t)
+
+	s, e := NewPLCSimulator(plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer s.Close()
+
+	c, e := NewClient(clientAddr, plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer c.Close()
+
+	// Interceptor that blocks writes
+	c.SetInterceptor(func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+		if info.Operation == OpWriteWords {
+			return nil, fmt.Errorf("writes are blocked")
+		}
+		return invoker(ctx)
+	})
+
+	// Write should be blocked
+	toWrite := []uint16{1, 2, 3}
+	err := c.WriteWords(ctx, MemoryAreaDMWord, 100, toWrite)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "blocked")
+
+	// Read should work
+	_, err = c.ReadWords(ctx, MemoryAreaDMWord, 100, 3)
+	assert.Nil(t, err)
+}
+
+func TestInterceptorWithContext(t *testing.T) {
+	ctx := context.Background()
+	clientAddr, plcAddr := getTestAddresses(t)
+
+	s, e := NewPLCSimulator(plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer s.Close()
+
+	c, e := NewClient(clientAddr, plcAddr)
+	if e != nil {
+		panic(e)
+	}
+	defer c.Close()
+
+	// Interceptor that adds trace ID from context
+	traceKey := "traceID"
+	var capturedTraceID string
+
+	c.SetInterceptor(func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+		if id := ctx.Value(traceKey); id != nil {
+			capturedTraceID = id.(string)
+		}
+		return invoker(ctx)
+	})
+
+	// Perform operation with trace ID
+	ctxWithTrace := context.WithValue(ctx, traceKey, "trace-12345")
+	toWrite := []uint16{1, 2, 3}
+	c.WriteWords(ctxWithTrace, MemoryAreaDMWord, 100, toWrite)
+
+	// Verify trace ID was captured
+	assert.Equal(t, "trace-12345", capturedTraceID)
 }

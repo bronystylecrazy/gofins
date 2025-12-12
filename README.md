@@ -254,6 +254,96 @@ if err == context.DeadlineExceeded {
 }
 ```
 
+## Interceptors
+
+Interceptors allow you to add custom logic around all FINS operations. Similar to gRPC unary interceptors, you can use them for logging, metrics, tracing, validation, retries, and more.
+
+### Basic Logging Interceptor
+
+```go
+client, _ := fins.NewClient(clientAddr, plcAddr)
+
+// Add logging interceptor
+client.SetInterceptor(fins.LoggingInterceptor(log.Default()))
+
+// All operations will now be logged
+data, _ := client.ReadWords(ctx, fins.MemoryAreaDMWord, 100, 5)
+// Output: [FINS] Starting ReadWords - Area:0x82 Address:100
+//         [FINS] Completed ReadWords - Duration:5ms
+```
+
+### Metrics Collection
+
+```go
+// Create metrics collector
+metrics := fins.NewMetricsCollector()
+client.SetInterceptor(metrics.Interceptor())
+
+// Perform operations...
+client.ReadWords(ctx, fins.MemoryAreaDMWord, 100, 5)
+client.WriteWords(ctx, fins.MemoryAreaDMWord, 200, []uint16{1, 2, 3})
+
+// Get statistics
+count, errors, avgDuration := metrics.GetStats(fins.OpReadWords)
+log.Printf("ReadWords: %d calls, %d errors, avg duration: %v", count, errors, avgDuration)
+```
+
+### Custom Interceptor
+
+```go
+// Create custom interceptor
+customInterceptor := func(ctx context.Context, info *fins.InterceptorInfo, invoker fins.Invoker) (interface{}, error) {
+    start := time.Now()
+    log.Printf("Starting %s at address %d", info.Operation, info.Address)
+
+    // Call the actual operation
+    result, err := invoker(ctx)
+
+    duration := time.Since(start)
+    if err != nil {
+        log.Printf("Failed %s: %v (took %v)", info.Operation, err, duration)
+    } else {
+        log.Printf("Completed %s (took %v)", info.Operation, duration)
+    }
+
+    return result, err
+}
+
+client.SetInterceptor(customInterceptor)
+```
+
+### Chaining Multiple Interceptors
+
+```go
+// Combine logging, metrics, and tracing
+client.SetInterceptor(fins.ChainInterceptors(
+    fins.LoggingInterceptor(log.Default()),
+    metrics.Interceptor(),
+    fins.TracingInterceptor("traceID"),
+))
+```
+
+### Validation Interceptor
+
+```go
+// Add validation before operations
+client.SetInterceptor(fins.ValidationInterceptor())
+
+// This will fail validation
+_, err := client.ReadWords(ctx, fins.MemoryAreaDMWord, 100, 0) // count = 0
+// Error: invalid read count: 0
+```
+
+### Retry Interceptor
+
+```go
+// Automatically retry failed operations
+client.SetInterceptor(fins.RetryInterceptor(3, 100*time.Millisecond))
+
+// Will retry up to 3 times with 100ms delay between retries
+data, err := client.ReadWords(ctx, fins.MemoryAreaDMWord, 100, 5)
+```
+
 ## Context Support
 
 All Read/Write methods now accept `context.Context` as their first parameter. This gives you:
@@ -351,6 +441,7 @@ data, err := client.ReadWords(ctx, memoryArea, address, count)
 - `DisableAutoReconnect()` - Disable automatic reconnection
 - `IsReconnecting() bool` - Check if client is reconnecting
 - `Shutdown()` - Graceful shutdown that stops reconnection attempts
+- `SetInterceptor(interceptor)` - Set an interceptor for all operations (logging, metrics, etc.)
 
 ## Comparison with gofins
 
@@ -368,6 +459,7 @@ Here's a quick comparison of what changed:
 | Cancellation | Not possible | Via context |
 | Timeout control | Global only | Per-operation |
 | Auto-reconnect | Not available | Exponential backoff |
+| Interceptors | Not available | Full support (logging, metrics, etc.) |
 | Client state check | No method | IsClosed() available |
 | Test isolation | Hardcoded ports | Dynamic allocation |
 

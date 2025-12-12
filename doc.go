@@ -87,6 +87,34 @@ reconnection completes, the operation returns with context.DeadlineExceeded:
 		log.Println("Operation timed out waiting for connection")
 	}
 
+# Interceptors
+
+Interceptors allow you to add custom logic around all FINS operations.
+Use them for logging, metrics, tracing, validation, retries, and more:
+
+	// Logging interceptor
+	client.SetInterceptor(fins.LoggingInterceptor(log.Default()))
+
+	// Metrics collection
+	metrics := fins.NewMetricsCollector()
+	client.SetInterceptor(metrics.Interceptor())
+
+	// Custom interceptor
+	client.SetInterceptor(func(ctx context.Context, info *fins.InterceptorInfo, invoker fins.Invoker) (interface{}, error) {
+		start := time.Now()
+		log.Printf("Starting %s", info.Operation)
+		result, err := invoker(ctx)
+		log.Printf("Finished %s in %v", info.Operation, time.Since(start))
+		return result, err
+	})
+
+	// Chain multiple interceptors
+	client.SetInterceptor(fins.ChainInterceptors(
+		fins.LoggingInterceptor(log.Default()),
+		metrics.Interceptor(),
+		fins.ValidationInterceptor(),
+	))
+
 # Context Support
 
 All read/write operations accept a context.Context parameter for:

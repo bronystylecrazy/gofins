@@ -52,6 +52,10 @@ type Client struct {
 	reconnectMutex   sync.RWMutex
 	connected        chan struct{} // Closed when connected, recreated when disconnected
 	connectedMutex   sync.Mutex
+
+	// Interceptor for all operations
+	interceptor      Interceptor
+	interceptorMutex sync.RWMutex
 }
 
 // NewClient creates a new Omron FINS client
@@ -134,6 +138,28 @@ func (c *Client) IsReconnecting() bool {
 	c.reconnectMutex.RLock()
 	defer c.reconnectMutex.RUnlock()
 	return c.reconnecting
+}
+
+// SetInterceptor sets an interceptor for all FINS operations
+// The interceptor will be called for every Read/Write operation
+// Pass nil to disable interception
+func (c *Client) SetInterceptor(interceptor Interceptor) {
+	c.interceptorMutex.Lock()
+	defer c.interceptorMutex.Unlock()
+	c.interceptor = interceptor
+}
+
+// invoke calls the operation with interceptor if set, otherwise calls it directly
+func (c *Client) invoke(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	c.interceptorMutex.RLock()
+	interceptor := c.interceptor
+	c.interceptorMutex.RUnlock()
+
+	if interceptor != nil {
+		return interceptor(ctx, info, invoker)
+	}
+
+	return invoker(ctx)
 }
 
 // IsClosed returns true if the client has been closed
@@ -279,47 +305,75 @@ func (c *Client) reconnect() error {
 
 // ReadWords reads words from the PLC data area
 func (c *Client) ReadWords(ctx context.Context, memoryArea byte, address uint16, readCount uint16) ([]uint16, error) {
-	// Wait for connection to be ready
-	if err := c.waitForConnection(ctx); err != nil {
+	info := &InterceptorInfo{
+		Operation:  OpReadWords,
+		MemoryArea: memoryArea,
+		Address:    address,
+		Count:      readCount,
+	}
+
+	result, err := c.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		// Wait for connection to be ready
+		if err := c.waitForConnection(ctx); err != nil {
+			return nil, err
+		}
+
+		if checkIsWordMemoryArea(memoryArea) == false {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+		command := readCommand(memAddr(memoryArea, address), readCount)
+		r, e := c.sendCommand(ctx, command)
+		e = checkResponse(r, e)
+		if e != nil {
+			return nil, e
+		}
+
+		data := make([]uint16, readCount)
+		for i := 0; i < int(readCount); i++ {
+			data[i] = c.byteOrder.Uint16(r.data[i*2 : i*2+2])
+		}
+
+		return data, nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
-
-	if checkIsWordMemoryArea(memoryArea) == false {
-		return nil, IncompatibleMemoryAreaError{memoryArea}
-	}
-	command := readCommand(memAddr(memoryArea, address), readCount)
-	r, e := c.sendCommand(ctx, command)
-	e = checkResponse(r, e)
-	if e != nil {
-		return nil, e
-	}
-
-	data := make([]uint16, readCount)
-	for i := 0; i < int(readCount); i++ {
-		data[i] = c.byteOrder.Uint16(r.data[i*2 : i*2+2])
-	}
-
-	return data, nil
+	return result.([]uint16), nil
 }
 
 // ReadBytes reads bytes from the PLC data area
 func (c *Client) ReadBytes(ctx context.Context, memoryArea byte, address uint16, readCount uint16) ([]byte, error) {
-	// Wait for connection to be ready
-	if err := c.waitForConnection(ctx); err != nil {
+	info := &InterceptorInfo{
+		Operation:  OpReadBytes,
+		MemoryArea: memoryArea,
+		Address:    address,
+		Count:      readCount,
+	}
+
+	result, err := c.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		// Wait for connection to be ready
+		if err := c.waitForConnection(ctx); err != nil {
+			return nil, err
+		}
+
+		if checkIsWordMemoryArea(memoryArea) == false {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+		command := readCommand(memAddr(memoryArea, address), readCount)
+		r, e := c.sendCommand(ctx, command)
+		e = checkResponse(r, e)
+		if e != nil {
+			return nil, e
+		}
+
+		return r.data, nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
-
-	if checkIsWordMemoryArea(memoryArea) == false {
-		return nil, IncompatibleMemoryAreaError{memoryArea}
-	}
-	command := readCommand(memAddr(memoryArea, address), readCount)
-	r, e := c.sendCommand(ctx, command)
-	e = checkResponse(r, e)
-	if e != nil {
-		return nil, e
-	}
-
-	return r.data, nil
+	return result.([]byte), nil
 }
 
 // ReadString reads a string from the PLC data area
@@ -337,27 +391,42 @@ func (c *Client) ReadString(ctx context.Context, memoryArea byte, address uint16
 
 // ReadBits reads bits from the PLC data area
 func (c *Client) ReadBits(ctx context.Context, memoryArea byte, address uint16, bitOffset byte, readCount uint16) ([]bool, error) {
-	// Wait for connection to be ready
-	if err := c.waitForConnection(ctx); err != nil {
+	info := &InterceptorInfo{
+		Operation:  OpReadBits,
+		MemoryArea: memoryArea,
+		Address:    address,
+		BitOffset:  bitOffset,
+		Count:      readCount,
+	}
+
+	result, err := c.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		// Wait for connection to be ready
+		if err := c.waitForConnection(ctx); err != nil {
+			return nil, err
+		}
+
+		if checkIsBitMemoryArea(memoryArea) == false {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+		command := readCommand(memAddrWithBitOffset(memoryArea, address, bitOffset), readCount)
+		r, e := c.sendCommand(ctx, command)
+		e = checkResponse(r, e)
+		if e != nil {
+			return nil, e
+		}
+
+		data := make([]bool, readCount)
+		for i := 0; i < int(readCount); i++ {
+			data[i] = r.data[i]&0x01 > 0
+		}
+
+		return data, nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
-
-	if checkIsBitMemoryArea(memoryArea) == false {
-		return nil, IncompatibleMemoryAreaError{memoryArea}
-	}
-	command := readCommand(memAddrWithBitOffset(memoryArea, address, bitOffset), readCount)
-	r, e := c.sendCommand(ctx, command)
-	e = checkResponse(r, e)
-	if e != nil {
-		return nil, e
-	}
-
-	data := make([]bool, readCount)
-	for i := 0; i < int(readCount); i++ {
-		data[i] = r.data[i]&0x01 > 0
-	}
-
-	return data, nil
+	return result.([]bool), nil
 }
 
 // ReadClock reads the PLC clock
@@ -394,22 +463,33 @@ func (c *Client) ReadClock(ctx context.Context) (*time.Time, error) {
 
 // WriteWords writes words to the PLC data area
 func (c *Client) WriteWords(ctx context.Context, memoryArea byte, address uint16, data []uint16) error {
-	// Wait for connection to be ready
-	if err := c.waitForConnection(ctx); err != nil {
-		return err
+	info := &InterceptorInfo{
+		Operation:  OpWriteWords,
+		MemoryArea: memoryArea,
+		Address:    address,
+		Data:       data,
 	}
 
-	if checkIsWordMemoryArea(memoryArea) == false {
-		return IncompatibleMemoryAreaError{memoryArea}
-	}
-	l := uint16(len(data))
-	bts := make([]byte, 2*l)
-	for i := 0; i < int(l); i++ {
-		c.byteOrder.PutUint16(bts[i*2:i*2+2], data[i])
-	}
-	command := writeCommand(memAddr(memoryArea, address), l, bts)
+	_, err := c.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		// Wait for connection to be ready
+		if err := c.waitForConnection(ctx); err != nil {
+			return nil, err
+		}
 
-	return checkResponse(c.sendCommand(ctx, command))
+		if checkIsWordMemoryArea(memoryArea) == false {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+		l := uint16(len(data))
+		bts := make([]byte, 2*l)
+		for i := 0; i < int(l); i++ {
+			c.byteOrder.PutUint16(bts[i*2:i*2+2], data[i])
+		}
+		command := writeCommand(memAddr(memoryArea, address), l, bts)
+
+		return nil, checkResponse(c.sendCommand(ctx, command))
+	})
+
+	return err
 }
 
 // WriteString writes a string to the PLC data area
@@ -446,28 +526,40 @@ func (c *Client) WriteBytes(ctx context.Context, memoryArea byte, address uint16
 
 // WriteBits writes bits to the PLC data area
 func (c *Client) WriteBits(ctx context.Context, memoryArea byte, address uint16, bitOffset byte, data []bool) error {
-	// Wait for connection to be ready
-	if err := c.waitForConnection(ctx); err != nil {
-		return err
+	info := &InterceptorInfo{
+		Operation:  OpWriteBits,
+		MemoryArea: memoryArea,
+		Address:    address,
+		BitOffset:  bitOffset,
+		Data:       data,
 	}
 
-	if checkIsBitMemoryArea(memoryArea) == false {
-		return IncompatibleMemoryAreaError{memoryArea}
-	}
-	l := uint16(len(data))
-	bts := make([]byte, l)
-	var d byte
-	for i := 0; i < int(l); i++ {
-		if data[i] {
-			d = 0x01
-		} else {
-			d = 0x00
+	_, err := c.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		// Wait for connection to be ready
+		if err := c.waitForConnection(ctx); err != nil {
+			return nil, err
 		}
-		bts[i] = d
-	}
-	command := writeCommand(memAddrWithBitOffset(memoryArea, address, bitOffset), l, bts)
 
-	return checkResponse(c.sendCommand(ctx, command))
+		if checkIsBitMemoryArea(memoryArea) == false {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+		l := uint16(len(data))
+		bts := make([]byte, l)
+		var d byte
+		for i := 0; i < int(l); i++ {
+			if data[i] {
+				d = 0x01
+			} else {
+				d = 0x00
+			}
+			bts[i] = d
+		}
+		command := writeCommand(memAddrWithBitOffset(memoryArea, address, bitOffset), l, bts)
+
+		return nil, checkResponse(c.sendCommand(ctx, command))
+	})
+
+	return err
 }
 
 // SetBit sets a bit in the PLC data area
