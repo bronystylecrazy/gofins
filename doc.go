@@ -2,8 +2,8 @@
 Package fins implements the Omron FINS (Factory Interface Network Service) protocol
 for communication with Omron PLCs over UDP.
 
-This is an improved version of pkg/fins with critical bug fixes, context support,
-and enhanced reliability for production use.
+This is an improved version of https://github.com/l1va/gofins with critical bug fixes,
+context support, and enhanced reliability for production use.
 
 # Features
 
@@ -195,18 +195,18 @@ The package includes a PLC simulator for testing:
 	clientAddr := fins.NewAddress("127.0.0.1", 9601, 0, 2, 0)
 	client, _ := fins.NewClient(clientAddr, plcAddr)
 
-# Migration from pkg/fins
+# Migration from gofins
 
 Breaking change: All operations now require context.Context as first parameter.
 
-	// Before (pkg/fins):
+	// Before (gofins):
 	data, err := client.ReadWords(memoryArea, address, count)
 
-	// After (pkg/fins):
+	// After (this package):
 	ctx := context.Background()
 	data, err := client.ReadWords(ctx, memoryArea, address, count)
 
-# Improvements over pkg/fins
+# Improvements over gofins
 
   - Fixed bufio.Reader resource leak
   - Fixed race conditions in response handling
@@ -216,7 +216,5 @@ Breaking change: All operations now require context.Context as first parameter.
   - Added context support for all operations
   - Full thread-safety with documented guarantees
   - Better test coverage (66.4%)
-
-For detailed changelog, see CHANGELOG.md.
 */
 package fins

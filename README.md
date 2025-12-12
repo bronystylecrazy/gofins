@@ -1,10 +1,10 @@
 # FINS v2 - Improved Omron FINS Protocol Implementation
 
-This is an improved version of the original `pkg/fins` with critical bug fixes, context support, and various enhancements that make it production-ready.
+This is an improved version of [gofins](https://github.com/l1va/gofins) with critical bug fixes, context support, and various enhancements that make it production-ready.
 
 ## Why This Version Exists
 
-The original pkg/fins had several critical issues that made it unsuitable for production use:
+The original [gofins](https://github.com/l1va/gofins) had several critical issues that made it unsuitable for production use:
 - Memory leaks that could crash long-running applications
 - Race conditions in concurrent operations
 - Used `log.Fatal()` which would kill the entire application on errors
@@ -248,17 +248,17 @@ data, err := client.ReadWords(ctx, fins.MemoryAreaDMWord, 100, 5)
 - New tests for context cancellation and timeout handling
 - 66.5% test coverage (up from ~60%)
 
-## Migration from Original pkg/fins
+## Migration from gofins
 
 The main breaking change is that all Read/Write methods now require a context parameter.
 
-**Before:**
+**Before (gofins):**
 ```go
-import "github.com/original/fins"
+import "github.com/l1va/gofins"
 data, err := client.ReadWords(memoryArea, address, count)
 ```
 
-**After:**
+**After (this package):**
 ```go
 import (
     "context"
@@ -276,11 +276,11 @@ data, err := client.ReadWords(ctx, memoryArea, address, count)
 - `ClientClosedError` - New error type
 - `Server.Err()` - Monitor server errors
 
-## Before vs After
+## Comparison with gofins
 
 Here's a quick comparison of what changed:
 
-| Issue | Original | This Version |
+| Issue | gofins | This Package |
 |-------|----------|--------------|
 | Resource leak | Creates reader per iteration | Reuses single reader |
 | Race conditions | Unprotected slice access | Mutex-protected |
@@ -309,4 +309,4 @@ Here's a quick comparison of what changed:
 
 ## License
 
-Same as the original pkg/fins package.
+Same as the original [gofins](https://github.com/l1va/gofins) package.
