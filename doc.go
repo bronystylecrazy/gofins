@@ -55,6 +55,23 @@ Basic usage example:
 		}
 	}
 
+# Auto-Reconnect Support
+
+The client supports automatic reconnection with exponential backoff:
+
+	client, _ := fins.NewClient(clientAddr, plcAddr)
+
+	// Enable auto-reconnect with max 5 retries and 1s initial delay
+	client.EnableAutoReconnect(5, 1*time.Second)
+
+	// Check if reconnecting
+	if client.IsReconnecting() {
+		log.Println("Reconnecting...")
+	}
+
+	// Graceful shutdown (stops reconnection attempts)
+	defer client.Shutdown()
+
 # Context Support
 
 All read/write operations accept a context.Context parameter for:
@@ -214,6 +231,7 @@ Breaking change: All operations now require context.Context as first parameter.
   - Fixed iota bug in header constants
   - Added graceful shutdown with timeouts
   - Added context support for all operations
+  - Added auto-reconnect with exponential backoff
   - Full thread-safety with documented guarantees
   - Better test coverage (66.4%)
 */

@@ -182,6 +182,53 @@ default:
 }
 ```
 
+## Auto-Reconnect Support
+
+The client now supports automatic reconnection when the connection to the PLC fails or times out. This is especially useful for production environments where network issues can occur.
+
+### Enabling Auto-Reconnect
+
+```go
+client, err := fins.NewClient(clientAddr, plcAddr)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Enable auto-reconnect with 5 max retries and 1 second initial delay
+// The delay uses exponential backoff (1s, 2s, 4s, 8s, 16s, max 30s)
+client.EnableAutoReconnect(5, 1*time.Second)
+
+// For infinite retries, use 0
+client.EnableAutoReconnect(0, 1*time.Second)
+
+// Check if client is currently reconnecting
+if client.IsReconnecting() {
+    log.Println("Client is reconnecting...")
+}
+
+// Disable auto-reconnect
+client.DisableAutoReconnect()
+
+// Graceful shutdown (stops reconnection attempts and closes connection)
+client.Shutdown()
+```
+
+### Monitoring Reconnection Events
+
+```go
+go func() {
+    for err := range client.Err() {
+        if err != nil {
+            log.Printf("Client error: %v", err)
+            // Check if reconnecting
+            if client.IsReconnecting() {
+                log.Println("Attempting to reconnect...")
+            }
+        }
+    }
+}()
+```
+
 ## Context Support
 
 All Read/Write methods now accept `context.Context` as their first parameter. This gives you:
@@ -275,6 +322,10 @@ data, err := client.ReadWords(ctx, memoryArea, address, count)
 - `SetReadTimeout(time.Duration)` - Configure read timeout
 - `ClientClosedError` - New error type
 - `Server.Err()` - Monitor server errors
+- `EnableAutoReconnect(maxRetries, initialDelay)` - Enable automatic reconnection
+- `DisableAutoReconnect()` - Disable automatic reconnection
+- `IsReconnecting() bool` - Check if client is reconnecting
+- `Shutdown()` - Graceful shutdown that stops reconnection attempts
 
 ## Comparison with gofins
 
@@ -291,6 +342,7 @@ Here's a quick comparison of what changed:
 | Context support | None | Full support |
 | Cancellation | Not possible | Via context |
 | Timeout control | Global only | Per-operation |
+| Auto-reconnect | Not available | Exponential backoff |
 | Client state check | No method | IsClosed() available |
 | Test isolation | Hardcoded ports | Dynamic allocation |
 

@@ -19,6 +19,9 @@ const (
 	ERROR_CHANNEL_BUFFER     = 1   // Buffer size for error channels
 	RESPONSE_CHANNEL_BUFFER  = 1   // Buffer size for response channels
 	CLOSE_TIMEOUT            = 1 * time.Second
+	DEFAULT_MAX_RECONNECT    = 5   // Default maximum reconnection attempts
+	DEFAULT_RECONNECT_DELAY  = 1 * time.Second
+	MAX_RECONNECT_DELAY      = 30 * time.Second
 )
 
 // Client Omron FINS client
@@ -30,6 +33,8 @@ type Client struct {
 	sidMutex          sync.Mutex   // Protects sid incrementation
 	dst               FinsAddress
 	src               FinsAddress
+	localAddr         *net.UDPAddr  // Store for reconnection
+	remoteAddr        *net.UDPAddr  // Store for reconnection
 	sid               byte
 	closed            bool
 	closeMutex        sync.RWMutex // Protects closed flag
@@ -38,6 +43,13 @@ type Client struct {
 	byteOrder         binary.ByteOrder
 	listenErr         chan error // Channel to receive listen loop errors
 	done              chan struct{}
+
+	// Auto-reconnect configuration
+	autoReconnect    bool
+	maxReconnect     int
+	reconnectDelay   time.Duration
+	reconnecting     bool
+	reconnectMutex   sync.RWMutex
 }
 
 // NewClient creates a new Omron FINS client
@@ -45,11 +57,18 @@ func NewClient(localAddr, plcAddr Address) (*Client, error) {
 	c := new(Client)
 	c.dst = plcAddr.FinAddress
 	c.src = localAddr.FinAddress
+	c.localAddr = localAddr.UdpAddress
+	c.remoteAddr = plcAddr.UdpAddress
 	c.responseTimeoutMs = DEFAULT_RESPONSE_TIMEOUT
 	c.readTimeout = DEFAULT_READ_TIMEOUT
 	c.byteOrder = binary.BigEndian
 	c.listenErr = make(chan error, ERROR_CHANNEL_BUFFER)
 	c.done = make(chan struct{})
+
+	// Auto-reconnect defaults (disabled by default)
+	c.autoReconnect = false
+	c.maxReconnect = DEFAULT_MAX_RECONNECT
+	c.reconnectDelay = DEFAULT_RECONNECT_DELAY
 
 	conn, err := net.DialUDP("udp", localAddr.UdpAddress, plcAddr.UdpAddress)
 	if err != nil {
@@ -85,6 +104,31 @@ func (c *Client) SetReadTimeout(t time.Duration) {
 	c.readTimeout = t
 }
 
+// EnableAutoReconnect enables automatic reconnection on connection failures.
+// maxRetries: maximum number of reconnection attempts (0 = infinite)
+// initialDelay: initial delay before first retry (will use exponential backoff)
+func (c *Client) EnableAutoReconnect(maxRetries int, initialDelay time.Duration) {
+	c.reconnectMutex.Lock()
+	defer c.reconnectMutex.Unlock()
+	c.autoReconnect = true
+	c.maxReconnect = maxRetries
+	c.reconnectDelay = initialDelay
+}
+
+// DisableAutoReconnect disables automatic reconnection
+func (c *Client) DisableAutoReconnect() {
+	c.reconnectMutex.Lock()
+	defer c.reconnectMutex.Unlock()
+	c.autoReconnect = false
+}
+
+// IsReconnecting returns true if the client is currently attempting to reconnect
+func (c *Client) IsReconnecting() bool {
+	c.reconnectMutex.RLock()
+	defer c.reconnectMutex.RUnlock()
+	return c.reconnecting
+}
+
 // IsClosed returns true if the client has been closed
 func (c *Client) IsClosed() bool {
 	c.closeMutex.RLock()
@@ -112,6 +156,89 @@ func (c *Client) Close() error {
 	}
 
 	return err
+}
+
+// Shutdown gracefully shuts down the client, stopping any reconnection attempts
+func (c *Client) Shutdown() error {
+	// Disable auto-reconnect first
+	c.DisableAutoReconnect()
+
+	// Then close the connection
+	return c.Close()
+}
+
+// reconnect attempts to reconnect to the PLC with exponential backoff
+func (c *Client) reconnect() error {
+	c.reconnectMutex.Lock()
+	if c.reconnecting {
+		c.reconnectMutex.Unlock()
+		return fmt.Errorf("already reconnecting")
+	}
+	c.reconnecting = true
+	maxRetries := c.maxReconnect
+	delay := c.reconnectDelay
+	c.reconnectMutex.Unlock()
+
+	defer func() {
+		c.reconnectMutex.Lock()
+		c.reconnecting = false
+		c.reconnectMutex.Unlock()
+	}()
+
+	var lastErr error
+	attempts := 0
+
+	for {
+		// Check if client is being closed
+		if c.IsClosed() {
+			return fmt.Errorf("client closed during reconnection")
+		}
+
+		// Check if auto-reconnect was disabled
+		c.reconnectMutex.RLock()
+		if !c.autoReconnect {
+			c.reconnectMutex.RUnlock()
+			return fmt.Errorf("auto-reconnect disabled")
+		}
+		c.reconnectMutex.RUnlock()
+
+		// Check max retries (0 means infinite)
+		if maxRetries > 0 && attempts >= maxRetries {
+			return fmt.Errorf("max reconnection attempts (%d) reached: %w", maxRetries, lastErr)
+		}
+
+		attempts++
+
+		// Wait before retry (exponential backoff)
+		if attempts > 1 {
+			time.Sleep(delay)
+			// Exponential backoff with max cap
+			delay *= 2
+			if delay > MAX_RECONNECT_DELAY {
+				delay = MAX_RECONNECT_DELAY
+			}
+		}
+
+		// Attempt to reconnect
+		conn, err := net.DialUDP("udp", c.localAddr, c.remoteAddr)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Close old connection if it exists
+		if c.conn != nil {
+			c.conn.Close()
+		}
+
+		// Update connection
+		c.conn = conn
+
+		// Restart listen loop
+		go c.listenLoop()
+
+		return nil
+	}
 }
 
 // ReadWords reads words from the PLC data area
@@ -424,7 +551,25 @@ func (c *Client) listenLoop() {
 				// Expected closure, exit gracefully
 				return
 			default:
-				// Unexpected error - send to error channel instead of log.Fatal (FIX: error handling)
+				// Unexpected error - check if auto-reconnect is enabled
+				c.reconnectMutex.RLock()
+				shouldReconnect := c.autoReconnect
+				c.reconnectMutex.RUnlock()
+
+				if shouldReconnect && !c.IsClosed() {
+					// Attempt to reconnect
+					reconnectErr := c.reconnect()
+					if reconnectErr != nil {
+						// Reconnection failed, send error
+						c.listenErr <- fmt.Errorf("reconnection failed: %w (original error: %v)", reconnectErr, err)
+						return
+					}
+					// Successfully reconnected, exit this listen loop
+					// (new listen loop started in reconnect())
+					return
+				}
+
+				// Auto-reconnect disabled or client closed
 				if !c.IsClosed() {
 					c.listenErr <- fmt.Errorf("listen loop error: %w", err)
 				}
