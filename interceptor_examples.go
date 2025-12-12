@@ -6,22 +6,27 @@ package fins
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // LoggingInterceptor creates an interceptor that logs all operations
 // It logs operation start, end, duration, and any errors
-func LoggingInterceptor(logger *log.Logger) Interceptor {
+func LoggingInterceptor(logger *zap.Logger) Interceptor {
 	if logger == nil {
-		logger = log.Default()
+		logger = zap.NewExample()
 	}
 
 	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
 		start := time.Now()
 
 		// Log operation start
-		logger.Printf("[FINS] Starting %s - Area:0x%02X Address:%d", info.Operation, info.MemoryArea, info.Address)
+		logger.Info("[FINS] Starting operation",
+			zap.String("operation", string(info.Operation)),
+			zap.Uint8("memoryArea", info.MemoryArea),
+			zap.Uint16("address", info.Address),
+		)
 
 		// Execute the operation
 		result, err := invoker(ctx)
@@ -29,9 +34,16 @@ func LoggingInterceptor(logger *log.Logger) Interceptor {
 		// Log operation end with duration
 		duration := time.Since(start)
 		if err != nil {
-			logger.Printf("[FINS] Failed %s - Duration:%v Error:%v", info.Operation, duration, err)
+			logger.Error("[FINS] Failed operation",
+				zap.String("operation", string(info.Operation)),
+				zap.Duration("duration", duration),
+				zap.Error(err),
+			)
 		} else {
-			logger.Printf("[FINS] Completed %s - Duration:%v", info.Operation, duration)
+			logger.Info("[FINS] Completed operation",
+				zap.String("operation", string(info.Operation)),
+				zap.Duration("duration", duration),
+			)
 		}
 
 		return result, err

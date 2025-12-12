@@ -264,12 +264,14 @@ Interceptors allow you to add custom logic around all FINS operations. Similar t
 client, _ := fins.NewClient(clientAddr, plcAddr)
 
 // Add logging interceptor
-client.SetInterceptor(fins.LoggingInterceptor(log.Default()))
+logger, _ := zap.NewProduction()
+client.SetInterceptor(fins.LoggingInterceptor(logger))
 
 // All operations will now be logged
 data, _ := client.ReadWords(ctx, fins.MemoryAreaDMWord, 100, 5)
-// Output: [FINS] Starting ReadWords - Area:0x82 Address:100
-//         [FINS] Completed ReadWords - Duration:5ms
+// Logs (structured):
+//  INFO    FINS    starting    {"operation": "ReadWords", "area": "0x82", "address": 100}
+//  INFO    FINS    completed   {"operation": "ReadWords", "duration": "5ms"}
 ```
 
 ### Metrics Collection
@@ -317,7 +319,7 @@ client.SetInterceptor(customInterceptor)
 ```go
 // Combine logging, metrics, and tracing
 client.SetInterceptor(fins.ChainInterceptors(
-    fins.LoggingInterceptor(log.Default()),
+    fins.LoggingInterceptor(logger),
     metrics.Interceptor(),
     fins.TracingInterceptor("traceID"),
 ))

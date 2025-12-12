@@ -1,14 +1,16 @@
 package fins
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"log"
-	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestLoggingInterceptor(t *testing.T) {
@@ -21,31 +23,64 @@ func TestLoggingInterceptor(t *testing.T) {
 	}
 
 	// Success case
-	var buf bytes.Buffer
-	logger := log.New(&buf, "", 0)
+	core, logs := observer.New(zap.InfoLevel)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(
+		zap.WrapCore(func(zapcore.Core) zapcore.Core { return core }),
+	))
 	_, err := LoggingInterceptor(logger)(ctx, info, func(context.Context) (interface{}, error) {
 		return "ok", nil
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	logged := buf.String()
-	if !strings.Contains(logged, "Starting ReadWords") || !strings.Contains(logged, "Completed ReadWords") {
-		t.Fatalf("unexpected log output: %q", logged)
+	if logs.Len() != 2 {
+		t.Fatalf("expected 2 log entries, got %d", logs.Len())
+	}
+	entries := logs.All()
+	start := entries[0]
+	if start.Message != "starting" || fieldString(start.Context, "operation") != "ReadWords" {
+		t.Fatalf("unexpected start log: %+v", start)
+	}
+	end := entries[1]
+	if end.Message != "completed" || fieldString(end.Context, "operation") != "ReadWords" {
+		t.Fatalf("unexpected completion log: %+v", end)
 	}
 
 	// Error case
-	buf.Reset()
+	logs.TakeAll()
 	_, err = LoggingInterceptor(logger)(ctx, info, func(context.Context) (interface{}, error) {
 		return nil, errors.New("boom")
 	})
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	logged = buf.String()
-	if !strings.Contains(logged, "Failed ReadWords") || !strings.Contains(logged, "boom") {
-		t.Fatalf("unexpected log output on error: %q", logged)
+	entries = logs.All()
+	if len(entries) != 2 || entries[1].Message != "failed" {
+		t.Fatalf("unexpected log output on error: %+v", entries)
 	}
+	if entries[1].Level != zap.ErrorLevel || fieldError(entries[1].Context, "error") != "boom" {
+		t.Fatalf("expected error entry with boom, got %+v", entries[1])
+	}
+}
+
+func fieldString(fields []zap.Field, key string) string {
+	for _, f := range fields {
+		if f.Key == key {
+			return f.String
+		}
+	}
+	return ""
+}
+
+func fieldError(fields []zap.Field, key string) string {
+	for _, f := range fields {
+		if f.Key == key {
+			if err, ok := f.Interface.(error); ok {
+				return err.Error()
+			}
+		}
+	}
+	return ""
 }
 
 func TestMetricsCollectorConcurrency(t *testing.T) {

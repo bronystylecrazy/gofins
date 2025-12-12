@@ -2,8 +2,10 @@ package fins
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // LoggingInterceptor creates an interceptor that logs all operations
@@ -11,22 +13,29 @@ import (
 //
 // Example:
 //
-//	client.SetInterceptor(fins.LoggingInterceptor(log.Default()))
+//	logger, _ := zap.NewProduction()
+//	client.SetInterceptor(fins.LoggingInterceptor(logger))
 //
 // Output:
 //
-//	[FINS] Starting ReadWords - Area:0x82 Address:100
-//	[FINS] Completed ReadWords - Duration:5ms
-func LoggingInterceptor(logger *log.Logger) Interceptor {
+//	INFO	FINS	starting operation=ReadWords area=0x82 address=100
+//	INFO	FINS	completed operation=ReadWords duration_ms=5
+func LoggingInterceptor(logger *zap.Logger) Interceptor {
 	if logger == nil {
-		logger = log.Default()
+		logger = zap.NewNop()
 	}
+	// Named logger keeps consistent component label.
+	logger = logger.Named("FINS")
 
 	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
 		start := time.Now()
 
 		// Log operation start
-		logger.Printf("[FINS] Starting %s - Area:0x%02X Address:%d", info.Operation, info.MemoryArea, info.Address)
+		logger.Info("starting",
+			zap.String("operation", string(info.Operation)),
+			zap.String("area", fmt.Sprintf("0x%02X", info.MemoryArea)),
+			zap.Uint16("address", info.Address),
+		)
 
 		// Execute the operation
 		result, err := invoker(ctx)
@@ -34,9 +43,16 @@ func LoggingInterceptor(logger *log.Logger) Interceptor {
 		// Log operation end with duration
 		duration := time.Since(start)
 		if err != nil {
-			logger.Printf("[FINS] Failed %s - Duration:%v Error:%v", info.Operation, duration, err)
+			logger.Error("failed",
+				zap.String("operation", string(info.Operation)),
+				zap.Duration("duration", duration),
+				zap.Error(err),
+			)
 		} else {
-			logger.Printf("[FINS] Completed %s - Duration:%v", info.Operation, duration)
+			logger.Info("completed",
+				zap.String("operation", string(info.Operation)),
+				zap.Duration("duration", duration),
+			)
 		}
 
 		return result, err

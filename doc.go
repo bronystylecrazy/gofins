@@ -92,8 +92,9 @@ reconnection completes, the operation returns with context.DeadlineExceeded:
 Interceptors allow you to add custom logic around all FINS operations.
 Use them for logging, metrics, tracing, validation, retries, and more:
 
-	// Logging interceptor
-	client.SetInterceptor(fins.LoggingInterceptor(log.Default()))
+	// Logging interceptor (zap)
+	logger, _ := zap.NewProduction()
+	client.SetInterceptor(fins.LoggingInterceptor(logger))
 
 	// Metrics collection
 	metrics := fins.NewMetricsCollector()
@@ -110,7 +111,7 @@ Use them for logging, metrics, tracing, validation, retries, and more:
 
 	// Chain multiple interceptors
 	client.SetInterceptor(fins.ChainInterceptors(
-		fins.LoggingInterceptor(log.Default()),
+		fins.LoggingInterceptor(logger),
 		metrics.Interceptor(),
 		fins.ValidationInterceptor(),
 	))
