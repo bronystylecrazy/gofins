@@ -100,6 +100,8 @@ func main() {
 	respTimeout := flag.Uint("resp-timeout-ms", 1000, "FINS response timeout in milliseconds (0 = wait indefinitely)")
 	execOnce := flag.String("exec", "", "Execute a single command (quoted) and exit (e.g., \"readwords dm 100 3\")")
 	execInterval := flag.Duration("exec-interval", 0, "If set with -exec, repeat the command with this interval (e.g., 500ms)")
+	autoReconnect := flag.Bool("auto-reconnect", true, "Enable auto-reconnect")
+	autoReconnectDelay := flag.Duration("auto-reconnect-delay", time.Second, "Initial delay for auto-reconnect backoff")
 	format := flag.String("format", "text", "Output format: text|json")
 	quiet := flag.Bool("quiet", false, "Quiet output (suppress info, show only command output)")
 	flag.Parse()
@@ -152,6 +154,9 @@ func main() {
 		log.Fatalf("failed to create client: %v", err)
 	}
 	client.SetTimeoutMs(*respTimeout)
+	if *autoReconnect {
+		client.EnableAutoReconnect(0, *autoReconnectDelay) // 0 = infinite retries
+	}
 	defer client.Close()
 
 	log.Printf("Connected to PLC %s (net=%d node=%d unit=%d) from local net=%d node=%d unit=%d",

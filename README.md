@@ -112,7 +112,9 @@ go run ./examples/client \
   -remote-port 9600 \
   -remote-node 10 \
   -local-node 2 \
-  -resp-timeout-ms 1000
+  -resp-timeout-ms 1000 \
+  -auto-reconnect \
+  -auto-reconnect-delay 1s
 
 # One-shot command (no prompt)
 go run ./examples/client \
