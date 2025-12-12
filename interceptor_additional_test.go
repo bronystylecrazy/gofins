@@ -27,8 +27,12 @@ func TestLoggingInterceptor(t *testing.T) {
 	logger := zaptest.NewLogger(t, zaptest.WrapOptions(
 		zap.WrapCore(func(zapcore.Core) zapcore.Core { return core }),
 	))
-	_, err := LoggingInterceptor(logger)(ctx, info, func(context.Context) (interface{}, error) {
-		return "ok", nil
+	_, err := LoggingInterceptor(logger)(&InterceptorCtx{
+		ctx:  ctx,
+		info: info,
+		invoker: func(context.Context) (interface{}, error) {
+			return "ok", nil
+		},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -48,8 +52,12 @@ func TestLoggingInterceptor(t *testing.T) {
 
 	// Error case
 	logs.TakeAll()
-	_, err = LoggingInterceptor(logger)(ctx, info, func(context.Context) (interface{}, error) {
-		return nil, errors.New("boom")
+	_, err = LoggingInterceptor(logger)(&InterceptorCtx{
+		ctx:  ctx,
+		info: info,
+		invoker: func(context.Context) (interface{}, error) {
+			return nil, errors.New("boom")
+		},
 	})
 	if err == nil {
 		t.Fatalf("expected error")
@@ -94,9 +102,13 @@ func TestMetricsCollectorConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _ = interceptor(ctx, &InterceptorInfo{Operation: OpReadWords}, func(context.Context) (interface{}, error) {
-				time.Sleep(1 * time.Millisecond)
-				return "ok", nil
+			_, _ = interceptor(&InterceptorCtx{
+				ctx:  ctx,
+				info: &InterceptorInfo{Operation: OpReadWords},
+				invoker: func(context.Context) (interface{}, error) {
+					time.Sleep(1 * time.Millisecond)
+					return "ok", nil
+				},
 			})
 		}()
 	}
@@ -106,8 +118,12 @@ func TestMetricsCollectorConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _ = interceptor(ctx, &InterceptorInfo{Operation: OpWriteWords}, func(context.Context) (interface{}, error) {
-				return nil, errors.New("fail")
+			_, _ = interceptor(&InterceptorCtx{
+				ctx:  ctx,
+				info: &InterceptorInfo{Operation: OpWriteWords},
+				invoker: func(context.Context) (interface{}, error) {
+					return nil, errors.New("fail")
+				},
 			})
 		}()
 	}
@@ -140,13 +156,17 @@ func TestValidationInterceptorWithLimits(t *testing.T) {
 
 	// Valid read should reach invoker
 	called := false
-	_, err := validator(ctx, &InterceptorInfo{
-		Operation:  OpReadWords,
-		Count:      1,
-		MemoryArea: MemoryAreaDMWord,
-	}, func(context.Context) (interface{}, error) {
-		called = true
-		return "ok", nil
+	_, err := validator(&InterceptorCtx{
+		ctx: ctx,
+		info: &InterceptorInfo{
+			Operation:  OpReadWords,
+			Count:      1,
+			MemoryArea: MemoryAreaDMWord,
+		},
+		invoker: func(context.Context) (interface{}, error) {
+			called = true
+			return "ok", nil
+		},
 	})
 	if err != nil || !called {
 		t.Fatalf("validator blocked valid operation: called=%v err=%v", called, err)
@@ -166,8 +186,12 @@ func TestValidationInterceptorWithLimits(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := validator(ctx, tt.info, func(context.Context) (interface{}, error) {
-				return nil, nil
+			_, err := validator(&InterceptorCtx{
+				ctx:  ctx,
+				info: tt.info,
+				invoker: func(context.Context) (interface{}, error) {
+					return nil, nil
+				},
 			})
 			if err == nil {
 				t.Fatalf("expected validation error for %s", tt.name)
@@ -184,39 +208,49 @@ func TestAddressRangeAndReadOnlyInterceptors(t *testing.T) {
 	readOnly := ReadOnlyInterceptor()
 
 	// Valid read passes both
-	_, err := validator(ctx, &InterceptorInfo{Operation: OpReadWords, MemoryArea: MemoryAreaDMWord, Address: 5, Count: 1}, func(context.Context) (interface{}, error) {
-		return "ok", nil
+	_, err := validator(&InterceptorCtx{
+		ctx:     ctx,
+		info:    &InterceptorInfo{Operation: OpReadWords, MemoryArea: MemoryAreaDMWord, Address: 5, Count: 1},
+		invoker: func(context.Context) (interface{}, error) { return "ok", nil },
 	})
 	if err != nil {
 		t.Fatalf("unexpected error from address validator: %v", err)
 	}
 
-	_, err = readOnly(ctx, &InterceptorInfo{Operation: OpReadWords}, func(context.Context) (interface{}, error) {
-		return "ok", nil
+	_, err = readOnly(&InterceptorCtx{
+		ctx:     ctx,
+		info:    &InterceptorInfo{Operation: OpReadWords},
+		invoker: func(context.Context) (interface{}, error) { return "ok", nil },
 	})
 	if err != nil {
 		t.Fatalf("read-only should allow reads: %v", err)
 	}
 
 	// Invalid area
-	_, err = validator(ctx, &InterceptorInfo{Operation: OpReadWords, MemoryArea: MemoryAreaDMBit, Address: 5, Count: 1}, func(context.Context) (interface{}, error) {
-		return "ok", nil
+	_, err = validator(&InterceptorCtx{
+		ctx:     ctx,
+		info:    &InterceptorInfo{Operation: OpReadWords, MemoryArea: MemoryAreaDMBit, Address: 5, Count: 1},
+		invoker: func(context.Context) (interface{}, error) { return "ok", nil },
 	})
 	if err == nil {
 		t.Fatalf("expected area validation error")
 	}
 
 	// Address overflow
-	_, err = validator(ctx, &InterceptorInfo{Operation: OpReadWords, MemoryArea: MemoryAreaDMWord, Address: 10, Count: 2}, func(context.Context) (interface{}, error) {
-		return "ok", nil
+	_, err = validator(&InterceptorCtx{
+		ctx:     ctx,
+		info:    &InterceptorInfo{Operation: OpReadWords, MemoryArea: MemoryAreaDMWord, Address: 10, Count: 2},
+		invoker: func(context.Context) (interface{}, error) { return "ok", nil },
 	})
 	if err == nil {
 		t.Fatalf("expected address overflow error")
 	}
 
 	// Write should be blocked
-	_, err = readOnly(ctx, &InterceptorInfo{Operation: OpWriteWords}, func(context.Context) (interface{}, error) {
-		return "ok", nil
+	_, err = readOnly(&InterceptorCtx{
+		ctx:     ctx,
+		info:    &InterceptorInfo{Operation: OpWriteWords},
+		invoker: func(context.Context) (interface{}, error) { return "ok", nil },
 	})
 	if err == nil {
 		t.Fatalf("expected read-only interceptor to block write")
@@ -228,13 +262,13 @@ func TestRetryInterceptors(t *testing.T) {
 
 	// Basic retry until success
 	attempts := 0
-	result, err := RetryInterceptor(2, 0)(ctx, &InterceptorInfo{Operation: OpReadWords}, func(context.Context) (interface{}, error) {
+	result, err := RetryInterceptor(2, 0)(&InterceptorCtx{ctx: ctx, info: &InterceptorInfo{Operation: OpReadWords}, invoker: func(context.Context) (interface{}, error) {
 		if attempts < 2 {
 			attempts++
 			return nil, errors.New("boom")
 		}
 		return "ok", nil
-	})
+	}})
 	if err != nil || result != "ok" || attempts != 2 {
 		t.Fatalf("retry interceptor failed: result=%v err=%v attempts=%d", result, err, attempts)
 	}
@@ -243,32 +277,32 @@ func TestRetryInterceptors(t *testing.T) {
 	cancelCtx, cancel := context.WithCancel(ctx)
 	cancel()
 	attempts = 0
-	_, err = RetryInterceptor(3, 0)(cancelCtx, &InterceptorInfo{Operation: OpReadWords}, func(context.Context) (interface{}, error) {
+	_, err = RetryInterceptor(3, 0)(&InterceptorCtx{ctx: cancelCtx, info: &InterceptorInfo{Operation: OpReadWords}, invoker: func(context.Context) (interface{}, error) {
 		attempts++
 		return nil, errors.New("boom")
-	})
+	}})
 	if err == nil || attempts != 1 {
 		t.Fatalf("expected single attempt due to canceled context, attempts=%d err=%v", attempts, err)
 	}
 
 	// Conditional retry
 	attempts = 0
-	_, err = RetryInterceptorConditional(3, 0, func(err error) bool { return false })(ctx, &InterceptorInfo{Operation: OpReadWords}, func(context.Context) (interface{}, error) {
+	_, err = RetryInterceptorConditional(3, 0, func(err error) bool { return false })(&InterceptorCtx{ctx: ctx, info: &InterceptorInfo{Operation: OpReadWords}, invoker: func(context.Context) (interface{}, error) {
 		attempts++
 		return nil, errors.New("boom")
-	})
+	}})
 	if err == nil || attempts != 1 {
 		t.Fatalf("conditional retry should stop when shouldRetry returns false, attempts=%d err=%v", attempts, err)
 	}
 
 	attempts = 0
-	result, err = RetryInterceptorWithBackoff(2, 0, 1*time.Millisecond)(ctx, &InterceptorInfo{Operation: OpReadWords}, func(context.Context) (interface{}, error) {
+	result, err = RetryInterceptorWithBackoff(2, 0, 1*time.Millisecond)(&InterceptorCtx{ctx: ctx, info: &InterceptorInfo{Operation: OpReadWords}, invoker: func(context.Context) (interface{}, error) {
 		if attempts == 0 {
 			attempts++
 			return nil, errors.New("boom")
 		}
 		return "ok", nil
-	})
+	}})
 	if err != nil || result != "ok" || attempts != 1 {
 		t.Fatalf("backoff retry failed: result=%v err=%v attempts=%d", result, err, attempts)
 	}
@@ -279,22 +313,26 @@ func TestChainInterceptorsOrder(t *testing.T) {
 	info := &InterceptorInfo{Operation: OpReadWords}
 	order := make([]string, 0, 5)
 
-	i1 := func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	i1 := func(ic *InterceptorCtx) (interface{}, error) {
 		order = append(order, "i1-start")
-		res, err := invoker(ctx)
+		res, err := ic.Invoke(nil)
 		order = append(order, "i1-end")
 		return res, err
 	}
-	i2 := func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	i2 := func(ic *InterceptorCtx) (interface{}, error) {
 		order = append(order, "i2-start")
-		res, err := invoker(ctx)
+		res, err := ic.Invoke(nil)
 		order = append(order, "i2-end")
 		return res, err
 	}
 
-	result, err := ChainInterceptors(i1, i2)(ctx, info, func(context.Context) (interface{}, error) {
-		order = append(order, "invoker")
-		return "ok", nil
+	result, err := ChainInterceptors(i1, i2)(&InterceptorCtx{
+		ctx:  ctx,
+		info: info,
+		invoker: func(context.Context) (interface{}, error) {
+			order = append(order, "invoker")
+			return "ok", nil
+		},
 	})
 	if err != nil || result != "ok" {
 		t.Fatalf("chain interceptors error: result=%v err=%v", result, err)

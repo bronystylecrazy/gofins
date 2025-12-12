@@ -1,7 +1,6 @@
 package fins
 
 import (
-	"context"
 	"sync"
 	"time"
 )
@@ -38,18 +37,19 @@ func NewMetricsCollector() *MetricsCollector {
 
 // Interceptor returns an interceptor that collects metrics
 func (m *MetricsCollector) Interceptor() Interceptor {
-	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	return func(c *InterceptorCtx) (interface{}, error) {
 		start := time.Now()
 
-		result, err := invoker(ctx)
+		result, err := c.Invoke(nil)
 
 		duration := time.Since(start)
 
 		m.mu.Lock()
-		m.OperationCount[info.Operation]++
-		m.TotalDuration[info.Operation] += duration
+		op := c.Info().Operation
+		m.OperationCount[op]++
+		m.TotalDuration[op] += duration
 		if err != nil {
-			m.ErrorCount[info.Operation]++
+			m.ErrorCount[op]++
 		}
 		m.mu.Unlock()
 

@@ -294,18 +294,18 @@ log.Printf("ReadWords: %d calls, %d errors, avg duration: %v", count, errors, av
 
 ```go
 // Create custom interceptor
-customInterceptor := func(ctx context.Context, info *fins.InterceptorInfo, invoker fins.Invoker) (interface{}, error) {
+customInterceptor := func(ic *fins.InterceptorCtx) (interface{}, error) {
     start := time.Now()
-    log.Printf("Starting %s at address %d", info.Operation, info.Address)
+    log.Printf("Starting %s at address %d", ic.Info().Operation, ic.Info().Address)
 
     // Call the actual operation
-    result, err := invoker(ctx)
+    result, err := ic.Invoke(nil)
 
     duration := time.Since(start)
     if err != nil {
-        log.Printf("Failed %s: %v (took %v)", info.Operation, err, duration)
+        log.Printf("Failed %s: %v (took %v)", ic.Info().Operation, err, duration)
     } else {
-        log.Printf("Completed %s (took %v)", info.Operation, duration)
+        log.Printf("Completed %s (took %v)", ic.Info().Operation, duration)
     }
 
     return result, err
@@ -323,6 +323,23 @@ client.SetInterceptor(fins.ChainInterceptors(
     metrics.Interceptor(),
     fins.TracingInterceptor("traceID"),
 ))
+```
+
+### Plugins (Use)
+
+Register reusable hooks similar to `gorm.Use`:
+
+```go
+type loggingPlugin struct{}
+
+func (loggingPlugin) Name() string { return "logging" }
+func (loggingPlugin) Initialize(c *fins.Client) error {
+    logger, _ := zap.NewProduction()
+    c.SetInterceptor(fins.LoggingInterceptor(logger))
+    return nil
+}
+
+client.Use(&loggingPlugin{}) // duplicate names return an error
 ```
 
 ### Validation Interceptor

@@ -33,32 +33,32 @@ type InterceptorInfo struct {
 // Invoker is a function that executes the actual operation
 type Invoker func(ctx context.Context) (interface{}, error)
 
-// Interceptor is a function that can intercept and wrap FINS operations
-// It receives:
-//   - ctx: the context for the operation
-//   - info: information about the operation being performed
-//   - invoker: function to call the actual operation
-//
-// The interceptor can:
-//   - Log the operation
-//   - Measure timing/metrics
-//   - Add tracing
-//   - Modify the context
-//   - Handle errors
-//   - Short-circuit the operation
-//
-// Example:
-//
-//	func loggingInterceptor(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
-//	    start := time.Now()
-//	    log.Printf("Starting %s at address %d", info.Operation, info.Address)
-//
-//	    result, err := invoker(ctx)
-//
-//	    log.Printf("Finished %s in %v, err: %v", info.Operation, time.Since(start), err)
-//	    return result, err
-//	}
-type Interceptor func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error)
+// InterceptorCtx groups arguments for an interceptor.
+// It mirrors Fiber's style where the context is accessed via methods.
+type InterceptorCtx struct {
+	ctx     context.Context
+	info    *InterceptorInfo
+	invoker Invoker
+}
+
+// Context returns the operation context.
+func (c *InterceptorCtx) Context() context.Context { return c.ctx }
+
+// Info returns the operation metadata.
+func (c *InterceptorCtx) Info() *InterceptorInfo { return c.info }
+
+// Invoke calls the underlying operation with the provided context.
+// If ctx is nil, the stored context is used.
+func (c *InterceptorCtx) Invoke(ctx context.Context) (interface{}, error) {
+	if ctx == nil {
+		ctx = c.ctx
+	}
+	return c.invoker(ctx)
+}
+
+// Interceptor can intercept and wrap FINS operations.
+// It receives a single *InterceptorCtx for readability and future extensibility.
+type Interceptor func(c *InterceptorCtx) (interface{}, error)
 
 // ChainInterceptors chains multiple interceptors into a single interceptor
 // Interceptors are executed in order: first interceptor wraps second, second wraps third, etc.
@@ -71,9 +71,17 @@ func ChainInterceptors(interceptors ...Interceptor) Interceptor {
 		return interceptors[0]
 	}
 
-	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
-		return interceptors[0](ctx, info, func(ctx context.Context) (interface{}, error) {
-			return ChainInterceptors(interceptors[1:]...)(ctx, info, invoker)
+	return func(c *InterceptorCtx) (interface{}, error) {
+		return interceptors[0](&InterceptorCtx{
+			ctx:  c.ctx,
+			info: c.info,
+			invoker: func(ctx context.Context) (interface{}, error) {
+				return ChainInterceptors(interceptors[1:]...)(&InterceptorCtx{
+					ctx:     ctx,
+					info:    c.info,
+					invoker: c.invoker,
+				})
+			},
 		})
 	}
 }

@@ -713,9 +713,9 @@ func TestInterceptorBasic(t *testing.T) {
 
 	// Track interceptor calls
 	var calls []OperationType
-	c.SetInterceptor(func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
-		calls = append(calls, info.Operation)
-		return invoker(ctx)
+	c.SetInterceptor(func(ic *InterceptorCtx) (interface{}, error) {
+		calls = append(calls, ic.Info().Operation)
+		return ic.Invoke(nil)
 	})
 
 	// Perform operations
@@ -785,16 +785,16 @@ func TestInterceptorChaining(t *testing.T) {
 	// Track execution order
 	var order []string
 
-	interceptor1 := func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	interceptor1 := func(ic *InterceptorCtx) (interface{}, error) {
 		order = append(order, "interceptor1-before")
-		result, err := invoker(ctx)
+		result, err := ic.Invoke(nil)
 		order = append(order, "interceptor1-after")
 		return result, err
 	}
 
-	interceptor2 := func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	interceptor2 := func(ic *InterceptorCtx) (interface{}, error) {
 		order = append(order, "interceptor2-before")
-		result, err := invoker(ctx)
+		result, err := ic.Invoke(nil)
 		order = append(order, "interceptor2-after")
 		return result, err
 	}
@@ -832,11 +832,11 @@ func TestInterceptorCanShortCircuit(t *testing.T) {
 	defer c.Close()
 
 	// Interceptor that blocks writes
-	c.SetInterceptor(func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
-		if info.Operation == OpWriteWords {
+	c.SetInterceptor(func(ic *InterceptorCtx) (interface{}, error) {
+		if ic.Info().Operation == OpWriteWords {
 			return nil, fmt.Errorf("writes are blocked")
 		}
-		return invoker(ctx)
+		return ic.Invoke(nil)
 	})
 
 	// Write should be blocked
@@ -870,11 +870,11 @@ func TestInterceptorWithContext(t *testing.T) {
 	traceKey := "traceID"
 	var capturedTraceID string
 
-	c.SetInterceptor(func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
-		if id := ctx.Value(traceKey); id != nil {
+	c.SetInterceptor(func(ic *InterceptorCtx) (interface{}, error) {
+		if id := ic.Context().Value(traceKey); id != nil {
 			capturedTraceID = id.(string)
 		}
-		return invoker(ctx)
+		return ic.Invoke(nil)
 	})
 
 	// Perform operation with trace ID

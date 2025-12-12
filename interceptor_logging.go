@@ -1,7 +1,6 @@
 package fins
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -27,7 +26,8 @@ func LoggingInterceptor(logger *zap.Logger) Interceptor {
 	// Named logger keeps consistent component label.
 	logger = logger.Named("FINS")
 
-	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	return func(c *InterceptorCtx) (interface{}, error) {
+		info := c.Info()
 		start := time.Now()
 
 		// Log operation start
@@ -38,7 +38,7 @@ func LoggingInterceptor(logger *zap.Logger) Interceptor {
 		)
 
 		// Execute the operation
-		result, err := invoker(ctx)
+		result, err := c.Invoke(nil)
 
 		// Log operation end with duration
 		duration := time.Since(start)

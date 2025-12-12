@@ -1,9 +1,6 @@
 package fins
 
-import (
-	"context"
-	"log"
-)
+import "log"
 
 // TracingInterceptor creates an interceptor that extracts and logs trace IDs from context
 // The trace ID is extracted from the context using the provided key.
@@ -17,14 +14,15 @@ import (
 //	client.ReadWords(ctx, fins.MemoryAreaDMWord, 100, 5)
 //	// Output: [TRACE:trace-12345] ReadWords - Address:100
 func TracingInterceptor(traceIDKey interface{}) Interceptor {
-	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	return func(c *InterceptorCtx) (interface{}, error) {
 		// Get trace ID from context
-		traceID := ctx.Value(traceIDKey)
+		traceID := c.Context().Value(traceIDKey)
 		if traceID != nil {
+			info := c.Info()
 			log.Printf("[TRACE:%v] %s - Address:%d", traceID, info.Operation, info.Address)
 		}
 
-		return invoker(ctx)
+		return c.Invoke(nil)
 	}
 }
 
@@ -34,14 +32,15 @@ func TracingInterceptorWithLogger(traceIDKey interface{}, logger *log.Logger) In
 		logger = log.Default()
 	}
 
-	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	return func(c *InterceptorCtx) (interface{}, error) {
 		// Get trace ID from context
-		traceID := ctx.Value(traceIDKey)
+		traceID := c.Context().Value(traceIDKey)
 		if traceID != nil {
+			info := c.Info()
 			logger.Printf("[TRACE:%v] %s - Area:0x%02X Address:%d",
 				traceID, info.Operation, info.MemoryArea, info.Address)
 		}
 
-		return invoker(ctx)
+		return c.Invoke(nil)
 	}
 }

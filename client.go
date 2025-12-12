@@ -19,7 +19,7 @@ const (
 	ERROR_CHANNEL_BUFFER     = 1   // Buffer size for error channels
 	RESPONSE_CHANNEL_BUFFER  = 1   // Buffer size for response channels
 	CLOSE_TIMEOUT            = 1 * time.Second
-	DEFAULT_MAX_RECONNECT    = 5   // Default maximum reconnection attempts
+	DEFAULT_MAX_RECONNECT    = 5 // Default maximum reconnection attempts
 	DEFAULT_RECONNECT_DELAY  = 1 * time.Second
 	MAX_RECONNECT_DELAY      = 30 * time.Second
 )
@@ -33,8 +33,8 @@ type Client struct {
 	sidMutex          sync.Mutex   // Protects sid incrementation
 	dst               FinsAddress
 	src               FinsAddress
-	localAddr         *net.UDPAddr  // Store for reconnection
-	remoteAddr        *net.UDPAddr  // Store for reconnection
+	localAddr         *net.UDPAddr // Store for reconnection
+	remoteAddr        *net.UDPAddr // Store for reconnection
 	sid               byte
 	closed            bool
 	closeMutex        sync.RWMutex // Protects closed flag
@@ -45,17 +45,20 @@ type Client struct {
 	done              chan struct{}
 
 	// Auto-reconnect configuration
-	autoReconnect    bool
-	maxReconnect     int
-	reconnectDelay   time.Duration
-	reconnecting     bool
-	reconnectMutex   sync.RWMutex
-	connected        chan struct{} // Closed when connected, recreated when disconnected
-	connectedMutex   sync.Mutex
+	autoReconnect  bool
+	maxReconnect   int
+	reconnectDelay time.Duration
+	reconnecting   bool
+	reconnectMutex sync.RWMutex
+	connected      chan struct{} // Closed when connected, recreated when disconnected
+	connectedMutex sync.Mutex
 
 	// Interceptor for all operations
 	interceptor      Interceptor
 	interceptorMutex sync.RWMutex
+
+	// Plugin registry
+	pm pluginManager
 }
 
 // NewClient creates a new Omron FINS client
@@ -149,6 +152,12 @@ func (c *Client) SetInterceptor(interceptor Interceptor) {
 	c.interceptor = interceptor
 }
 
+// Use registers plugins (similar to gorm.Use).
+// Plugins are initialized in order; duplicate names return an error.
+func (c *Client) Use(plugins ...Plugin) error {
+	return c.pm.use(c, plugins...)
+}
+
 // invoke calls the operation with interceptor if set, otherwise calls it directly
 func (c *Client) invoke(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
 	c.interceptorMutex.RLock()
@@ -156,7 +165,11 @@ func (c *Client) invoke(ctx context.Context, info *InterceptorInfo, invoker Invo
 	c.interceptorMutex.RUnlock()
 
 	if interceptor != nil {
-		return interceptor(ctx, info, invoker)
+		return interceptor(&InterceptorCtx{
+			ctx:     ctx,
+			info:    info,
+			invoker: invoker,
+		})
 	}
 
 	return invoker(ctx)

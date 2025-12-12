@@ -1,9 +1,6 @@
 package fins
 
-import (
-	"context"
-	"fmt"
-)
+import "fmt"
 
 // ValidationInterceptor creates an interceptor that validates operation parameters
 // before executing them. It checks for common mistakes like zero counts or invalid data.
@@ -27,7 +24,8 @@ func ValidationInterceptor() Interceptor {
 //
 //	client.SetInterceptor(fins.ValidationInterceptorWithLimits(500, 500))
 func ValidationInterceptorWithLimits(maxReadCount, maxWriteCount uint16) Interceptor {
-	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	return func(c *InterceptorCtx) (interface{}, error) {
+		info := c.Info()
 		// Validate based on operation type
 		switch info.Operation {
 		case OpReadWords, OpReadBytes, OpReadString:
@@ -88,7 +86,7 @@ func ValidationInterceptorWithLimits(maxReadCount, maxWriteCount uint16) Interce
 			}
 		}
 
-		return invoker(ctx)
+		return c.Invoke(nil)
 	}
 }
 
@@ -104,7 +102,8 @@ func ValidationInterceptorWithLimits(maxReadCount, maxWriteCount uint16) Interce
 //	})
 //	client.SetInterceptor(validator)
 func AddressRangeValidator(allowedRanges map[byte]struct{ Min, Max uint16 }) Interceptor {
-	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	return func(c *InterceptorCtx) (interface{}, error) {
+		info := c.Info()
 		// Check if memory area is allowed
 		addrRange, allowed := allowedRanges[info.MemoryArea]
 		if !allowed {
@@ -126,7 +125,7 @@ func AddressRangeValidator(allowedRanges map[byte]struct{ Min, Max uint16 }) Int
 			}
 		}
 
-		return invoker(ctx)
+		return c.Invoke(nil)
 	}
 }
 
@@ -136,12 +135,13 @@ func AddressRangeValidator(allowedRanges map[byte]struct{ Min, Max uint16 }) Int
 //
 //	client.SetInterceptor(fins.ReadOnlyInterceptor())
 func ReadOnlyInterceptor() Interceptor {
-	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	return func(c *InterceptorCtx) (interface{}, error) {
+		info := c.Info()
 		switch info.Operation {
 		case OpWriteWords, OpWriteBytes, OpWriteString, OpWriteBits, OpSetBit, OpResetBit, OpToggleBit:
 			return nil, fmt.Errorf("write operation %s is not allowed in read-only mode", info.Operation)
 		}
 
-		return invoker(ctx)
+		return c.Invoke(nil)
 	}
 }

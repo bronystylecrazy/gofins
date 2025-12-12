@@ -101,11 +101,11 @@ Use them for logging, metrics, tracing, validation, retries, and more:
 	client.SetInterceptor(metrics.Interceptor())
 
 	// Custom interceptor
-	client.SetInterceptor(func(ctx context.Context, info *fins.InterceptorInfo, invoker fins.Invoker) (interface{}, error) {
+	client.SetInterceptor(func(ic *fins.InterceptorCtx) (interface{}, error) {
 		start := time.Now()
-		log.Printf("Starting %s", info.Operation)
-		result, err := invoker(ctx)
-		log.Printf("Finished %s in %v", info.Operation, time.Since(start))
+		log.Printf("Starting %s", ic.Info().Operation)
+		result, err := ic.Invoke(nil)
+		log.Printf("Finished %s in %v", ic.Info().Operation, time.Since(start))
 		return result, err
 	})
 
@@ -115,6 +115,18 @@ Use them for logging, metrics, tracing, validation, retries, and more:
 		metrics.Interceptor(),
 		fins.ValidationInterceptor(),
 	))
+
+Plugins (gorm-style) can register hooks in one place:
+
+	type loggingPlugin struct{}
+
+	func (loggingPlugin) Name() string { return "logging" }
+	func (loggingPlugin) Initialize(c *fins.Client) error {
+		c.SetInterceptor(fins.LoggingInterceptor(logger))
+		return nil
+	}
+
+	client.Use(&loggingPlugin{}) // duplicate names error
 
 # Context Support
 

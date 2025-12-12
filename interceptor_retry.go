@@ -1,7 +1,6 @@
 package fins
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
@@ -16,12 +15,14 @@ import (
 //	// Retry up to 3 times with 100ms delay
 //	client.SetInterceptor(fins.RetryInterceptor(3, 100*time.Millisecond))
 func RetryInterceptor(maxRetries int, delay time.Duration) Interceptor {
-	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	return func(c *InterceptorCtx) (interface{}, error) {
 		var result interface{}
 		var err error
+		ctx := c.Context()
+		info := c.Info()
 
 		for attempt := 0; attempt <= maxRetries; attempt++ {
-			result, err = invoker(ctx)
+			result, err = c.Invoke(ctx)
 			if err == nil {
 				return result, nil
 			}
@@ -51,13 +52,15 @@ func RetryInterceptor(maxRetries int, delay time.Duration) Interceptor {
 //	// Retry with exponential backoff: 100ms, 200ms, 400ms, max 1s
 //	client.SetInterceptor(fins.RetryInterceptorWithBackoff(3, 100*time.Millisecond, 1*time.Second))
 func RetryInterceptorWithBackoff(maxRetries int, initialDelay, maxDelay time.Duration) Interceptor {
-	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	return func(c *InterceptorCtx) (interface{}, error) {
 		var result interface{}
 		var err error
 		delay := initialDelay
+		ctx := c.Context()
+		info := c.Info()
 
 		for attempt := 0; attempt <= maxRetries; attempt++ {
-			result, err = invoker(ctx)
+			result, err = c.Invoke(ctx)
 			if err == nil {
 				return result, nil
 			}
@@ -96,12 +99,14 @@ func RetryInterceptorWithBackoff(maxRetries int, initialDelay, maxDelay time.Dur
 //	}
 //	client.SetInterceptor(fins.RetryInterceptorConditional(3, 100*time.Millisecond, shouldRetry))
 func RetryInterceptorConditional(maxRetries int, delay time.Duration, shouldRetry func(error) bool) Interceptor {
-	return func(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	return func(c *InterceptorCtx) (interface{}, error) {
 		var result interface{}
 		var err error
+		ctx := c.Context()
+		info := c.Info()
 
 		for attempt := 0; attempt <= maxRetries; attempt++ {
-			result, err = invoker(ctx)
+			result, err = c.Invoke(ctx)
 			if err == nil {
 				return result, nil
 			}
