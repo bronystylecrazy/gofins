@@ -21,7 +21,7 @@ Basic usage example:
 		"context"
 		"log"
 		"time"
-		"your-project/pkg/fins"
+		"github.com/bronystylecrazy/fins"
 	)
 
 	func main() {
