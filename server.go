@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 )
 
 const (
@@ -152,8 +153,31 @@ func (s *Server) handler(r request) response {
 			endCode = EndCodeNotSupportedByModelVersion
 		}
 
+	case CommandCodeClockRead:
+		now := time.Now()
+		data = encodeClock(now)
+		endCode = EndCodeNormalCompletion
+
 	default:
 		endCode = EndCodeNotSupportedByModelVersion
 	}
 	return response{defaultResponseHeader(r.header), r.commandCode, endCode, data}
+}
+
+// encodeClock returns BCD-encoded clock data in the order year, month, day, hour, minute, second.
+// Year is encoded with two digits (year % 100) to match FINS spec expectations.
+func encodeClock(t time.Time) []byte {
+	return []byte{
+		bcdByte(t.Year() % 100),
+		bcdByte(int(t.Month())),
+		bcdByte(t.Day()),
+		bcdByte(t.Hour()),
+		bcdByte(t.Minute()),
+		bcdByte(t.Second()),
+	}
+}
+
+func bcdByte(v int) byte {
+	v = v % 100
+	return byte((v/10)<<4 | (v % 10))
 }

@@ -91,6 +91,34 @@ Available flags:
 - `-network` FINS network number (default `0`)
 - `-node` FINS node address (default `10`)
 - `-unit` FINS unit address (default `0`)
+
+Chat-style interactive client (auto-detects local host/port if unset):
+
+```bash
+go run ./examples/client \
+  -remote-host 127.0.0.1 \
+  -remote-port 9600 \
+  -remote-node 10 \
+  -local-node 2
+
+# One-shot command (no prompt)
+go run ./examples/client \
+  -remote-host 127.0.0.1 \
+  -remote-port 9600 \
+  -remote-node 10 \
+  -exec "readwords dm 100 3" \
+  -format json \
+  -quiet
+```
+
+Once running, try commands such as:
+- `readwords dm 100 3`
+- `writewords dm 100 1 2 3`
+- `readbits dm 100 0 8`
+- `writebits dm 100 0 1 0 1 1`
+- `clock`
+
+Interactive client uses `liner` for readline-style editing and history (arrow keys, Ctrl+R/Emacs keys). Use `-format text|json` and `-quiet` to control output formatting/noise.
 ```
 
 ## Critical Fixes
