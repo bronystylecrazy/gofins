@@ -145,7 +145,6 @@ Once running, try commands such as:
 - `clock`
 
 Interactive client uses `liner` for readline-style editing and history (arrow keys, Ctrl+R/Emacs keys). Use `-format text|json` and `-quiet` to control output formatting/noise.
-```
 
 ## Critical Fixes
 
