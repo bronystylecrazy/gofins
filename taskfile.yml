@@ -17,6 +17,10 @@ vars:
       arch: amd64
 
 tasks:
+  gen-mocks:
+    desc: Generate mocks for interfaces
+    cmds:
+      - mockery
   build:server:
     desc: Build the PLC simulator server for the local platform
     cmds:
