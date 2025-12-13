@@ -39,7 +39,7 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    defer client.Close()
+    defer client.Shutdown()
 
     // Monitor for errors in a separate goroutine
     go func() {
@@ -71,6 +71,7 @@ func main() {
         log.Printf("Write error: %v", err)
     }
 }
+```
 
 ## Examples
 
@@ -102,6 +103,7 @@ go run ./examples/server start
 go run ./examples/server stop
 go run ./examples/server restart
 go run ./examples/server uninstall
+
 ```
 
 Chat-style interactive client (auto-detects local host/port if unset):
