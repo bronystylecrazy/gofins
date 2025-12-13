@@ -28,7 +28,7 @@ import (
     "context"
     "log"
     "time"
-    "github.com/bronystylecrazy/fins"
+    "github.com/bronystylecrazy/gofins"
 )
 
 func main() {
@@ -521,7 +521,7 @@ data, err := client.ReadWords(memoryArea, address, count)
 ```go
 import (
     "context"
-    "github.com/bronystylecrazy/fins"
+    "github.com/bronystylecrazy/gofins"
 )
 
 ctx := context.Background() // or context with timeout/cancellation

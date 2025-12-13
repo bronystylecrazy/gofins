@@ -1,11 +1,12 @@
 //go:build ignore
 // +build ignore
 
-package fins
+package gofins
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"go.uber.org/zap"

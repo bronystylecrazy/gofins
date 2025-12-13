@@ -1,5 +1,5 @@
 /*
-Package fins implements the Omron FINS (Factory Interface Network Service) protocol
+package gofins implements the Omron FINS (Factory Interface Network Service) protocol
 for communication with Omron PLCs over UDP.
 
 This is an improved version of https://github.com/l1va/gofins with critical bug fixes,
@@ -291,4 +291,4 @@ Breaking change: All operations now require context.Context as first parameter.
   - Full thread-safety with documented guarantees
   - Better test coverage (66.4%)
 */
-package fins
+package gofins

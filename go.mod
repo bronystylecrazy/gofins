@@ -1,4 +1,4 @@
-module github.com/bronystylecrazy/fins
+module github.com/bronystylecrazy/gofins
 
 go 1.25.4
 
