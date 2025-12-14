@@ -442,6 +442,22 @@ func (lifecyclePlugin) OnDisconnected(c *fins.Client, err error) error {
 client.Use(&lifecyclePlugin{})
 ```
 
+Built-in connection watchdog plugin for metrics and structured events:
+
+```go
+watchdog := fins.NewConnectionWatchdog(8) // buffered event channel
+client.Use(watchdog)
+
+go func() {
+    for evt := range watchdog.Events() {
+        log.Printf("conn=%s downtime=%v err=%v", evt.Type, evt.Downtime, evt.Err)
+    }
+}()
+
+stats := watchdog.Stats()
+log.Printf("connected=%v total_downtime=%v last_err=%v", stats.Connected, stats.TotalDowntime, stats.LastDisconnectErr)
+```
+
 ### Validation Interceptor
 
 ```go
