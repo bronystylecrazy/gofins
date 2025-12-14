@@ -1,7 +1,6 @@
 package gofins
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -24,18 +23,28 @@ const (
 	MAX_RECONNECT_DELAY      = 30 * time.Second
 )
 
+type transportKind int
+
+const (
+	transportUDP transportKind = iota
+	transportTCP
+)
+
 // Client Omron FINS client
 // Thread-safe: all public methods can be called concurrently
 type Client struct {
-	conn              *net.UDPConn
+	tr                transport
+	tpKind            transportKind
 	resp              []chan response
 	respMutex         sync.RWMutex // Protects resp slice access
 	sidMutex          sync.Mutex   // Protects sid incrementation
 	dst               FinsAddress
 	src               FinsAddress
 	localAddr         *net.UDPAddr // Store for reconnection
+	localTCPAddr      *net.TCPAddr
 	localAddrMutex    sync.RWMutex
 	remoteAddr        *net.UDPAddr // Store for reconnection
+	remoteTCPAddr     *net.TCPAddr
 	sid               byte
 	closed            bool
 	closeMutex        sync.RWMutex // Protects closed flag
@@ -63,9 +72,10 @@ type Client struct {
 	pm pluginManager
 }
 
-// NewClient creates a new Omron FINS client
-func NewClient(localAddr, plcAddr Address) (*Client, error) {
+// NewUDPClient creates a new Omron FINS client over UDP.
+func NewUDPClient(localAddr, plcAddr Address) (*Client, error) {
 	c := new(Client)
+	c.tpKind = transportUDP
 	c.dst = plcAddr.FinAddress
 	c.src = localAddr.FinAddress
 	c.localAddr = localAddr.UdpAddress
@@ -86,15 +96,70 @@ func NewClient(localAddr, plcAddr Address) (*Client, error) {
 	c.reconnectDelay = DEFAULT_RECONNECT_DELAY
 	c.connected = make(chan struct{})
 
-	conn, err := net.DialUDP("udp", localAddr.UdpAddress, plcAddr.UdpAddress)
+	tr, err := newUDPTransport(localAddr.UdpAddress, plcAddr.UdpAddress)
 	if err != nil {
 		return nil, err
 	}
-	c.conn = conn
+	c.tr = tr
 	// Record the actual local address in case the OS chose one.
-	if la, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+	if la, ok := tr.LocalAddr().(*net.UDPAddr); ok {
 		c.localAddrMutex.Lock()
 		c.localAddr = la
+		c.localAddrMutex.Unlock()
+	}
+
+	c.resp = make([]chan response, MAX_SERVICE_ID_COUNT)
+	go c.listenLoop()
+
+	// Signal that we're connected
+	close(c.connected)
+
+	// Let plugins know the initial connection is ready.
+	if err := c.pm.notifyConnected(c); err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+// NewClient is kept for backward compatibility.
+// Deprecated: use NewUDPClient for UDP and NewTCPClient for TCP.
+func NewClient(localAddr, plcAddr Address) (*Client, error) {
+	return NewUDPClient(localAddr, plcAddr)
+}
+
+// NewTCPClient creates a new Omron FINS client over TCP (FINS/TCP).
+func NewTCPClient(localAddr, plcAddr Address) (*Client, error) {
+	c := new(Client)
+	c.tpKind = transportTCP
+	c.dst = plcAddr.FinAddress
+	c.src = localAddr.FinAddress
+	c.localTCPAddr = localAddr.TcpAddress
+	c.remoteTCPAddr = plcAddr.TcpAddress
+	c.responseTimeoutMs = DEFAULT_RESPONSE_TIMEOUT
+	c.readTimeout = DEFAULT_READ_TIMEOUT
+	c.byteOrder = binary.BigEndian
+	c.listenErr = make(chan error, ERROR_CHANNEL_BUFFER)
+	c.done = make(chan struct{})
+	// Auto-reconnect defaults (disabled by default)
+	c.autoReconnect = false
+	c.maxReconnect = DEFAULT_MAX_RECONNECT
+	c.reconnectDelay = DEFAULT_RECONNECT_DELAY
+	c.connected = make(chan struct{})
+
+	if c.remoteTCPAddr == nil {
+		return nil, fmt.Errorf("remote TCP address is required")
+	}
+
+	tr, err := newTCPTransport(context.Background(), c.localTCPAddr, c.remoteTCPAddr)
+	if err != nil {
+		return nil, err
+	}
+	c.tr = tr
+	// Record the actual local address in case the OS chose one.
+	if la, ok := tr.LocalAddr().(*net.TCPAddr); ok {
+		c.localAddrMutex.Lock()
+		c.localTCPAddr = la
 		c.localAddrMutex.Unlock()
 	}
 
@@ -125,7 +190,7 @@ func (c *Client) SetTimeoutMs(t uint) {
 	c.responseTimeoutMs = time.Duration(t)
 }
 
-// SetReadTimeout sets the UDP read timeout.
+// SetReadTimeout sets the network read timeout.
 // Default value: 5s.
 // This timeout helps ensure graceful shutdown.
 // Note: This should be called before starting operations for thread safety.
@@ -256,7 +321,10 @@ func (c *Client) Close() error {
 	c.closeMutex.Unlock()
 
 	close(c.done)
-	err := c.conn.Close()
+	var err error
+	if c.tr != nil {
+		err = c.tr.Close()
+	}
 
 	// Wait for listen loop to finish or timeout
 	select {
@@ -365,37 +433,51 @@ func (c *Client) reconnect() error {
 			}
 		}
 
-		// Close the existing connection before re-dialing to free the local UDP port.
+		// Close the existing transport before re-dialing to free the local port.
 		// Without this, re-dialing with the same local port will fail with EADDRINUSE,
 		// leaving the client stuck until it is restarted.
-		if c.conn != nil {
-			c.conn.Close()
-			c.conn = nil
+		if c.tr != nil {
+			_ = c.tr.Close()
+			c.tr = nil
 		}
 
-		// Optionally refresh the local bind address (handles interface changes like VPN up/down).
-		c.refreshLocalAddr()
+		switch c.tpKind {
+		case transportUDP:
+			// Optionally refresh the local bind address (handles interface changes like VPN up/down).
+			c.refreshLocalAddr()
 
-		// Attempt to reconnect
-		localAddr := c.getLocalAddr()
-		conn, err := net.DialUDP("udp", localAddr, c.remoteAddr)
-		if err != nil {
-			lastErr = err
+			localAddr := c.getLocalAddr()
+			tr, err := newUDPTransport(localAddr, c.remoteAddr)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+
+			// Update connection
+			c.localAddrMutex.Lock()
+			c.tr = tr
+			if la, ok := tr.LocalAddr().(*net.UDPAddr); ok {
+				c.localAddr = la
+			}
+			c.localAddrMutex.Unlock()
+
+		case transportTCP:
+			tr, err := newTCPTransport(context.Background(), c.getLocalTCPAddr(), c.remoteTCPAddr)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+
+			c.localAddrMutex.Lock()
+			c.tr = tr
+			if la, ok := tr.LocalAddr().(*net.TCPAddr); ok {
+				c.localTCPAddr = la
+			}
+			c.localAddrMutex.Unlock()
+		default:
+			lastErr = fmt.Errorf("unknown transport kind")
 			continue
 		}
-
-		// Close old connection if it exists
-		if c.conn != nil {
-			c.conn.Close()
-		}
-
-		// Update connection
-		c.localAddrMutex.Lock()
-		c.conn = conn
-		if la, ok := conn.LocalAddr().(*net.UDPAddr); ok {
-			c.localAddr = la
-		}
-		c.localAddrMutex.Unlock()
 
 		// Create new connected channel and close it to signal connection is ready
 		c.connectedMutex.Lock()
@@ -757,12 +839,14 @@ func (c *Client) sendCommand(ctx context.Context, command []byte) (*response, er
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if c.tr == nil {
+		return nil, fmt.Errorf("transport not initialized")
+	}
 
 	header := c.nextHeader()
 	bts := encodeHeader(*header)
 	bts = append(bts, command...)
-	_, err := (*c.conn).Write(bts)
-	if err != nil {
+	if err := c.tr.Send(ctx, bts); err != nil {
 		return nil, err
 	}
 
@@ -801,9 +885,10 @@ func (c *Client) listenLoop() {
 	errChan := c.listenErr
 	defer close(errChan)
 
-	// Create bufio.Reader once, not on each iteration (FIX: resource leak)
-	reader := bufio.NewReader(c.conn)
-	buf := make([]byte, READ_BUFFER_SIZE)
+	if c.tr == nil {
+		errChan <- fmt.Errorf("transport not initialized")
+		return
+	}
 
 	for {
 		// Set read deadline for graceful shutdown
@@ -811,11 +896,16 @@ func (c *Client) listenLoop() {
 		timeout := c.readTimeout
 		c.closeMutex.RUnlock()
 
+		readCtx := context.Background()
+		var cancel context.CancelFunc
 		if timeout > 0 {
-			c.conn.SetReadDeadline(time.Now().Add(timeout))
+			readCtx, cancel = context.WithTimeout(context.Background(), timeout)
 		}
 
-		n, err := reader.Read(buf)
+		payload, err := c.tr.Recv(readCtx)
+		if cancel != nil {
+			cancel()
+		}
 		if err != nil {
 			// Check if connection is closed by user
 			select {
@@ -859,8 +949,8 @@ func (c *Client) listenLoop() {
 			}
 		}
 
-		if n > 0 {
-			ans := decodeResponse(buf[:n])
+		if len(payload) > 0 {
+			ans := decodeResponse(payload)
 			// Thread-safe channel send
 			c.respMutex.RLock()
 			if int(ans.header.serviceID) < len(c.resp) && c.resp[ans.header.serviceID] != nil {
@@ -919,4 +1009,10 @@ func (c *Client) getLocalAddr() *net.UDPAddr {
 	c.localAddrMutex.RLock()
 	defer c.localAddrMutex.RUnlock()
 	return c.localAddr
+}
+
+func (c *Client) getLocalTCPAddr() *net.TCPAddr {
+	c.localAddrMutex.RLock()
+	defer c.localAddrMutex.RUnlock()
+	return c.localTCPAddr
 }

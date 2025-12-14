@@ -35,7 +35,7 @@ func main() {
     clientAddr := fins.NewAddress("", 9600, 0, 2, 0)
     plcAddr := fins.NewAddress("192.168.1.100", 9600, 0, 1, 0)
 
-    client, err := fins.NewClient(clientAddr, plcAddr)
+    client, err := fins.NewUDPClient(clientAddr, plcAddr)
     if err != nil {
         log.Fatal(err)
     }
@@ -146,6 +146,23 @@ Once running, try commands such as:
 
 Interactive client uses `liner` for readline-style editing and history (arrow keys, Ctrl+R/Emacs keys). Use `-format text|json` and `-quiet` to control output formatting/noise.
 
+### TCP transport
+
+FINS/TCP is supported alongside UDP. Use the TCP-specific helpers when you need stream transport (e.g., traversing firewalls/NAT that block UDP):
+
+```go
+clientAddr := fins.NewTCPAddress("", 9600, 0, 2, 0)          // local TCP bind (empty = OS chooses)
+plcAddr := fins.NewTCPAddress("192.168.1.100", 9600, 0, 1, 0) // remote PLC over TCP
+
+client, err := fins.NewTCPClient(clientAddr, plcAddr)
+if err != nil {
+    log.Fatal(err)
+}
+defer client.Shutdown()
+```
+
+For testing, enable TCP on the built-in simulator: `fins.NewPLCSimulator(plcAddr, fins.WithTCPTransport())` mirrors the UDP simulator but speaks FINS/TCP (handshake + framed messages).
+
 ## Critical Fixes
 
 ### 1. Fixed bufio.Reader Resource Leak
@@ -216,7 +233,7 @@ if err != nil {
 }
 
 // Usage:
-client, _ := fins.NewClient(localAddr, plcAddr)
+client, _ := fins.NewUDPClient(localAddr, plcAddr)
 go func() {
     if err := <-client.Err(); err != nil {
         log.Printf("Client error: %v", err)
@@ -268,7 +285,7 @@ The client now supports automatic reconnection when the connection to the PLC fa
 ### Enabling Auto-Reconnect
 
 ```go
-client, err := fins.NewClient(clientAddr, plcAddr)
+client, err := fins.NewUDPClient(clientAddr, plcAddr)
 if err != nil {
     log.Fatal(err)
 }
@@ -340,7 +357,7 @@ Interceptors allow you to add custom logic around all FINS operations. Similar t
 ### Basic Logging Interceptor
 
 ```go
-client, _ := fins.NewClient(clientAddr, plcAddr)
+client, _ := fins.NewUDPClient(clientAddr, plcAddr)
 
 // Add logging interceptor
 logger, _ := zap.NewProduction()

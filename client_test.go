@@ -52,7 +52,7 @@ func TestFinsClient(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -127,7 +127,7 @@ func TestClientClosed(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -153,7 +153,7 @@ func TestContextCancellation(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -181,7 +181,7 @@ func TestContextCancellationImmediate(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -207,7 +207,7 @@ func TestContextWithTimeout(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -237,7 +237,7 @@ func TestBitOperations(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -288,7 +288,7 @@ func TestSetByteOrder(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -327,7 +327,7 @@ func TestSetReadTimeout(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -356,7 +356,7 @@ func TestInvalidMemoryAreas(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -448,7 +448,7 @@ func TestResponseTimeout(t *testing.T) {
 	clientAddr, plcAddr := getTestAddresses(t)
 
 	// Don't create server - client will timeout
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -473,7 +473,7 @@ func TestDoubleClose(t *testing.T) {
 		panic(e)
 	}
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -526,7 +526,7 @@ func TestAutoReconnectDisabledByDefault(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -550,7 +550,7 @@ func TestEnableDisableAutoReconnect(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -582,7 +582,7 @@ func TestShutdownStopsReconnection(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -617,7 +617,7 @@ func TestOperationsWaitForConnection(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -642,7 +642,7 @@ func TestOperationsRespectContextDuringWait(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -672,7 +672,7 @@ func TestWaitForConnectionReturnsOnClientClose(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -705,7 +705,7 @@ func TestInterceptorBasic(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -742,7 +742,7 @@ func TestInterceptorMetrics(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -776,7 +776,7 @@ func TestInterceptorChaining(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -825,7 +825,7 @@ func TestInterceptorCanShortCircuit(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -860,7 +860,7 @@ func TestInterceptorWithContext(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, e := NewClient(clientAddr, plcAddr)
+	c, e := NewUDPClient(clientAddr, plcAddr)
 	if e != nil {
 		panic(e)
 	}
@@ -884,4 +884,43 @@ func TestInterceptorWithContext(t *testing.T) {
 
 	// Verify trace ID was captured
 	assert.Equal(t, "trace-12345", capturedTraceID)
+}
+
+func TestAddressHelpers(t *testing.T) {
+	udpAddr := NewUDPAddress("127.0.0.1", 9600, 1, 2, 3)
+	assert.NotNil(t, udpAddr.UdpAddress)
+	assert.Nil(t, udpAddr.TcpAddress)
+	assert.Equal(t, byte(1), udpAddr.FinAddress.Network)
+
+	tcpAddr := NewTCPAddress("127.0.0.1", 9601, 4, 5, 6)
+	assert.NotNil(t, tcpAddr.TcpAddress)
+	assert.Nil(t, tcpAddr.UdpAddress)
+	assert.Equal(t, byte(5), tcpAddr.FinAddress.Node)
+
+	both := NewAddress("127.0.0.1", 9602, 7, 8, 9)
+	assert.NotNil(t, both.UdpAddress)
+	assert.NotNil(t, both.TcpAddress)
+	assert.Equal(t, byte(9), both.FinAddress.Unit)
+}
+
+func TestTCPClientReadWrite(t *testing.T) {
+	ctx := context.Background()
+	plcAddr := NewTCPAddress("127.0.0.1", getAvailablePort(t), 0, 10, 0)
+	clientAddr := NewTCPAddress("", 0, 0, 2, 0)
+
+	sim, err := NewPLCSimulator(plcAddr, WithTCPTransport())
+	assert.NoError(t, err)
+	defer sim.Close()
+
+	c, err := NewTCPClient(clientAddr, plcAddr)
+	assert.NoError(t, err)
+	defer c.Close()
+
+	toWrite := []uint16{9, 8, 7, 6}
+	err = c.WriteWords(ctx, MemoryAreaDMWord, 120, toWrite)
+	assert.NoError(t, err)
+
+	read, err := c.ReadWords(ctx, MemoryAreaDMWord, 120, uint16(len(toWrite)))
+	assert.NoError(t, err)
+	assert.Equal(t, toWrite, read)
 }

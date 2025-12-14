@@ -1,11 +1,11 @@
 all: false
 dir: "{{.InterfaceDir}}"
-filename: mocks.go
+filename: finstest/mocks.go
 force-file-write: true
 formatter: goimports
-log-level: info
+log-level: warn
 structname: "{{.Mock}}{{.InterfaceName}}"
-pkgname: "{{.SrcPackageName}}"
+pkgname: "finstest"
 recursive: true
 template: testify
 packages:

@@ -176,7 +176,7 @@ func main() {
 	localAddr := fins.NewAddress(*localHost, *localPort, byte(*localNetwork), byte(*localNode), byte(*localUnit))
 	remoteAddr := fins.NewAddress(*remoteHost, *remotePort, byte(*remoteNetwork), byte(*remoteNode), byte(*remoteUnit))
 
-	client, err := fins.NewClient(localAddr, remoteAddr)
+	client, err := fins.NewUDPClient(localAddr, remoteAddr)
 	if err != nil {
 		log.Fatalf("failed to create client: %v", err)
 	}

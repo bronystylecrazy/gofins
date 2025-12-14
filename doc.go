@@ -30,7 +30,7 @@ Basic usage example:
 		plcAddr := fins.NewAddress("192.168.1.100", 9600, 0, 1, 0)
 
 		// Create client
-		client, err := fins.NewClient(clientAddr, plcAddr)
+		client, err := fins.NewUDPClient(clientAddr, plcAddr)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -59,7 +59,7 @@ Basic usage example:
 
 The client supports automatic reconnection with exponential backoff:
 
-	client, _ := fins.NewClient(clientAddr, plcAddr)
+	client, _ := fins.NewUDPClient(clientAddr, plcAddr)
 
 	// Enable auto-reconnect with max 5 retries and 1s initial delay
 	client.EnableAutoReconnect(5, 1*time.Second)
@@ -216,7 +216,7 @@ The package provides specific error types:
 
 Errors from the listen loop are sent to a channel:
 
-	client, _ := fins.NewClient(localAddr, plcAddr)
+	client, _ := fins.NewUDPClient(localAddr, plcAddr)
 
 	go func() {
 		if err := <-client.Err(); err != nil {
@@ -266,7 +266,7 @@ The package includes a PLC simulator for testing:
 
 	// Now create client and test
 	clientAddr := fins.NewAddress("127.0.0.1", 9601, 0, 2, 0)
-	client, _ := fins.NewClient(clientAddr, plcAddr)
+	client, _ := fins.NewUDPClient(clientAddr, plcAddr)
 
 # Migration from gofins
 

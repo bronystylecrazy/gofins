@@ -2,13 +2,15 @@
 // github.com/vektra/mockery
 // template: testify
 
-package gofins
+package finstest
 
 import (
 	"context"
 	"encoding/binary"
+	"net"
 	"time"
 
+	"github.com/bronystylecrazy/gofins"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -403,7 +405,7 @@ func (_m *MockClientHooks) EXPECT() *MockClientHooks_Expecter {
 }
 
 // SetInterceptor provides a mock function for the type MockClientHooks
-func (_mock *MockClientHooks) SetInterceptor(interceptor Interceptor) {
+func (_mock *MockClientHooks) SetInterceptor(interceptor gofins.Interceptor) {
 	_mock.Called(interceptor)
 	return
 }
@@ -414,16 +416,16 @@ type MockClientHooks_SetInterceptor_Call struct {
 }
 
 // SetInterceptor is a helper method to define mock.On call
-//   - interceptor Interceptor
+//   - interceptor gofins.Interceptor
 func (_e *MockClientHooks_Expecter) SetInterceptor(interceptor interface{}) *MockClientHooks_SetInterceptor_Call {
 	return &MockClientHooks_SetInterceptor_Call{Call: _e.mock.On("SetInterceptor", interceptor)}
 }
 
-func (_c *MockClientHooks_SetInterceptor_Call) Run(run func(interceptor Interceptor)) *MockClientHooks_SetInterceptor_Call {
+func (_c *MockClientHooks_SetInterceptor_Call) Run(run func(interceptor gofins.Interceptor)) *MockClientHooks_SetInterceptor_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 Interceptor
+		var arg0 gofins.Interceptor
 		if args[0] != nil {
-			arg0 = args[0].(Interceptor)
+			arg0 = args[0].(gofins.Interceptor)
 		}
 		run(
 			arg0,
@@ -437,13 +439,13 @@ func (_c *MockClientHooks_SetInterceptor_Call) Return() *MockClientHooks_SetInte
 	return _c
 }
 
-func (_c *MockClientHooks_SetInterceptor_Call) RunAndReturn(run func(interceptor Interceptor)) *MockClientHooks_SetInterceptor_Call {
+func (_c *MockClientHooks_SetInterceptor_Call) RunAndReturn(run func(interceptor gofins.Interceptor)) *MockClientHooks_SetInterceptor_Call {
 	_c.Run(run)
 	return _c
 }
 
 // Use provides a mock function for the type MockClientHooks
-func (_mock *MockClientHooks) Use(plugins ...Plugin) error {
+func (_mock *MockClientHooks) Use(plugins ...gofins.Plugin) error {
 	var tmpRet mock.Arguments
 	if len(plugins) > 0 {
 		tmpRet = _mock.Called(plugins)
@@ -457,7 +459,7 @@ func (_mock *MockClientHooks) Use(plugins ...Plugin) error {
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(...Plugin) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(...gofins.Plugin) error); ok {
 		r0 = returnFunc(plugins...)
 	} else {
 		r0 = ret.Error(0)
@@ -471,18 +473,18 @@ type MockClientHooks_Use_Call struct {
 }
 
 // Use is a helper method to define mock.On call
-//   - plugins ...Plugin
+//   - plugins ...gofins.Plugin
 func (_e *MockClientHooks_Expecter) Use(plugins ...interface{}) *MockClientHooks_Use_Call {
 	return &MockClientHooks_Use_Call{Call: _e.mock.On("Use",
 		append([]interface{}{}, plugins...)...)}
 }
 
-func (_c *MockClientHooks_Use_Call) Run(run func(plugins ...Plugin)) *MockClientHooks_Use_Call {
+func (_c *MockClientHooks_Use_Call) Run(run func(plugins ...gofins.Plugin)) *MockClientHooks_Use_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 []Plugin
-		var variadicArgs []Plugin
+		var arg0 []gofins.Plugin
+		var variadicArgs []gofins.Plugin
 		if len(args) > 0 {
-			variadicArgs = args[0].([]Plugin)
+			variadicArgs = args[0].([]gofins.Plugin)
 		}
 		arg0 = variadicArgs
 		run(
@@ -497,7 +499,7 @@ func (_c *MockClientHooks_Use_Call) Return(err error) *MockClientHooks_Use_Call 
 	return _c
 }
 
-func (_c *MockClientHooks_Use_Call) RunAndReturn(run func(plugins ...Plugin) error) *MockClientHooks_Use_Call {
+func (_c *MockClientHooks_Use_Call) RunAndReturn(run func(plugins ...gofins.Plugin) error) *MockClientHooks_Use_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -2459,7 +2461,7 @@ func (_c *MockFINSClient_SetByteOrder_Call) RunAndReturn(run func(o binary.ByteO
 }
 
 // SetInterceptor provides a mock function for the type MockFINSClient
-func (_mock *MockFINSClient) SetInterceptor(interceptor Interceptor) {
+func (_mock *MockFINSClient) SetInterceptor(interceptor gofins.Interceptor) {
 	_mock.Called(interceptor)
 	return
 }
@@ -2470,16 +2472,16 @@ type MockFINSClient_SetInterceptor_Call struct {
 }
 
 // SetInterceptor is a helper method to define mock.On call
-//   - interceptor Interceptor
+//   - interceptor gofins.Interceptor
 func (_e *MockFINSClient_Expecter) SetInterceptor(interceptor interface{}) *MockFINSClient_SetInterceptor_Call {
 	return &MockFINSClient_SetInterceptor_Call{Call: _e.mock.On("SetInterceptor", interceptor)}
 }
 
-func (_c *MockFINSClient_SetInterceptor_Call) Run(run func(interceptor Interceptor)) *MockFINSClient_SetInterceptor_Call {
+func (_c *MockFINSClient_SetInterceptor_Call) Run(run func(interceptor gofins.Interceptor)) *MockFINSClient_SetInterceptor_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 Interceptor
+		var arg0 gofins.Interceptor
 		if args[0] != nil {
-			arg0 = args[0].(Interceptor)
+			arg0 = args[0].(gofins.Interceptor)
 		}
 		run(
 			arg0,
@@ -2493,7 +2495,7 @@ func (_c *MockFINSClient_SetInterceptor_Call) Return() *MockFINSClient_SetInterc
 	return _c
 }
 
-func (_c *MockFINSClient_SetInterceptor_Call) RunAndReturn(run func(interceptor Interceptor)) *MockFINSClient_SetInterceptor_Call {
+func (_c *MockFINSClient_SetInterceptor_Call) RunAndReturn(run func(interceptor gofins.Interceptor)) *MockFINSClient_SetInterceptor_Call {
 	_c.Run(run)
 	return _c
 }
@@ -2692,7 +2694,7 @@ func (_c *MockFINSClient_ToggleBit_Call) RunAndReturn(run func(ctx context.Conte
 }
 
 // Use provides a mock function for the type MockFINSClient
-func (_mock *MockFINSClient) Use(plugins ...Plugin) error {
+func (_mock *MockFINSClient) Use(plugins ...gofins.Plugin) error {
 	var tmpRet mock.Arguments
 	if len(plugins) > 0 {
 		tmpRet = _mock.Called(plugins)
@@ -2706,7 +2708,7 @@ func (_mock *MockFINSClient) Use(plugins ...Plugin) error {
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(...Plugin) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(...gofins.Plugin) error); ok {
 		r0 = returnFunc(plugins...)
 	} else {
 		r0 = ret.Error(0)
@@ -2720,18 +2722,18 @@ type MockFINSClient_Use_Call struct {
 }
 
 // Use is a helper method to define mock.On call
-//   - plugins ...Plugin
+//   - plugins ...gofins.Plugin
 func (_e *MockFINSClient_Expecter) Use(plugins ...interface{}) *MockFINSClient_Use_Call {
 	return &MockFINSClient_Use_Call{Call: _e.mock.On("Use",
 		append([]interface{}{}, plugins...)...)}
 }
 
-func (_c *MockFINSClient_Use_Call) Run(run func(plugins ...Plugin)) *MockFINSClient_Use_Call {
+func (_c *MockFINSClient_Use_Call) Run(run func(plugins ...gofins.Plugin)) *MockFINSClient_Use_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 []Plugin
-		var variadicArgs []Plugin
+		var arg0 []gofins.Plugin
+		var variadicArgs []gofins.Plugin
 		if len(args) > 0 {
-			variadicArgs = args[0].([]Plugin)
+			variadicArgs = args[0].([]gofins.Plugin)
 		}
 		arg0 = variadicArgs
 		run(
@@ -2746,7 +2748,7 @@ func (_c *MockFINSClient_Use_Call) Return(err error) *MockFINSClient_Use_Call {
 	return _c
 }
 
-func (_c *MockFINSClient_Use_Call) RunAndReturn(run func(plugins ...Plugin) error) *MockFINSClient_Use_Call {
+func (_c *MockFINSClient_Use_Call) RunAndReturn(run func(plugins ...gofins.Plugin) error) *MockFINSClient_Use_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -3061,7 +3063,7 @@ func (_m *MockPlugin) EXPECT() *MockPlugin_Expecter {
 }
 
 // Initialize provides a mock function for the type MockPlugin
-func (_mock *MockPlugin) Initialize(client *Client) error {
+func (_mock *MockPlugin) Initialize(client *gofins.Client) error {
 	ret := _mock.Called(client)
 
 	if len(ret) == 0 {
@@ -3069,7 +3071,7 @@ func (_mock *MockPlugin) Initialize(client *Client) error {
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(*Client) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(*gofins.Client) error); ok {
 		r0 = returnFunc(client)
 	} else {
 		r0 = ret.Error(0)
@@ -3083,16 +3085,16 @@ type MockPlugin_Initialize_Call struct {
 }
 
 // Initialize is a helper method to define mock.On call
-//   - client *Client
+//   - client *gofins.Client
 func (_e *MockPlugin_Expecter) Initialize(client interface{}) *MockPlugin_Initialize_Call {
 	return &MockPlugin_Initialize_Call{Call: _e.mock.On("Initialize", client)}
 }
 
-func (_c *MockPlugin_Initialize_Call) Run(run func(client *Client)) *MockPlugin_Initialize_Call {
+func (_c *MockPlugin_Initialize_Call) Run(run func(client *gofins.Client)) *MockPlugin_Initialize_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 *Client
+		var arg0 *gofins.Client
 		if args[0] != nil {
-			arg0 = args[0].(*Client)
+			arg0 = args[0].(*gofins.Client)
 		}
 		run(
 			arg0,
@@ -3106,7 +3108,7 @@ func (_c *MockPlugin_Initialize_Call) Return(err error) *MockPlugin_Initialize_C
 	return _c
 }
 
-func (_c *MockPlugin_Initialize_Call) RunAndReturn(run func(client *Client) error) *MockPlugin_Initialize_Call {
+func (_c *MockPlugin_Initialize_Call) RunAndReturn(run func(client *gofins.Client) error) *MockPlugin_Initialize_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -3183,7 +3185,7 @@ func (_m *MockConnectionPlugin) EXPECT() *MockConnectionPlugin_Expecter {
 }
 
 // Initialize provides a mock function for the type MockConnectionPlugin
-func (_mock *MockConnectionPlugin) Initialize(client *Client) error {
+func (_mock *MockConnectionPlugin) Initialize(client *gofins.Client) error {
 	ret := _mock.Called(client)
 
 	if len(ret) == 0 {
@@ -3191,7 +3193,7 @@ func (_mock *MockConnectionPlugin) Initialize(client *Client) error {
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(*Client) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(*gofins.Client) error); ok {
 		r0 = returnFunc(client)
 	} else {
 		r0 = ret.Error(0)
@@ -3205,16 +3207,16 @@ type MockConnectionPlugin_Initialize_Call struct {
 }
 
 // Initialize is a helper method to define mock.On call
-//   - client *Client
+//   - client *gofins.Client
 func (_e *MockConnectionPlugin_Expecter) Initialize(client interface{}) *MockConnectionPlugin_Initialize_Call {
 	return &MockConnectionPlugin_Initialize_Call{Call: _e.mock.On("Initialize", client)}
 }
 
-func (_c *MockConnectionPlugin_Initialize_Call) Run(run func(client *Client)) *MockConnectionPlugin_Initialize_Call {
+func (_c *MockConnectionPlugin_Initialize_Call) Run(run func(client *gofins.Client)) *MockConnectionPlugin_Initialize_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 *Client
+		var arg0 *gofins.Client
 		if args[0] != nil {
-			arg0 = args[0].(*Client)
+			arg0 = args[0].(*gofins.Client)
 		}
 		run(
 			arg0,
@@ -3228,7 +3230,7 @@ func (_c *MockConnectionPlugin_Initialize_Call) Return(err error) *MockConnectio
 	return _c
 }
 
-func (_c *MockConnectionPlugin_Initialize_Call) RunAndReturn(run func(client *Client) error) *MockConnectionPlugin_Initialize_Call {
+func (_c *MockConnectionPlugin_Initialize_Call) RunAndReturn(run func(client *gofins.Client) error) *MockConnectionPlugin_Initialize_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -3278,7 +3280,7 @@ func (_c *MockConnectionPlugin_Name_Call) RunAndReturn(run func() string) *MockC
 }
 
 // OnConnected provides a mock function for the type MockConnectionPlugin
-func (_mock *MockConnectionPlugin) OnConnected(client *Client) error {
+func (_mock *MockConnectionPlugin) OnConnected(client *gofins.Client) error {
 	ret := _mock.Called(client)
 
 	if len(ret) == 0 {
@@ -3286,7 +3288,7 @@ func (_mock *MockConnectionPlugin) OnConnected(client *Client) error {
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(*Client) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(*gofins.Client) error); ok {
 		r0 = returnFunc(client)
 	} else {
 		r0 = ret.Error(0)
@@ -3300,16 +3302,16 @@ type MockConnectionPlugin_OnConnected_Call struct {
 }
 
 // OnConnected is a helper method to define mock.On call
-//   - client *Client
+//   - client *gofins.Client
 func (_e *MockConnectionPlugin_Expecter) OnConnected(client interface{}) *MockConnectionPlugin_OnConnected_Call {
 	return &MockConnectionPlugin_OnConnected_Call{Call: _e.mock.On("OnConnected", client)}
 }
 
-func (_c *MockConnectionPlugin_OnConnected_Call) Run(run func(client *Client)) *MockConnectionPlugin_OnConnected_Call {
+func (_c *MockConnectionPlugin_OnConnected_Call) Run(run func(client *gofins.Client)) *MockConnectionPlugin_OnConnected_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 *Client
+		var arg0 *gofins.Client
 		if args[0] != nil {
-			arg0 = args[0].(*Client)
+			arg0 = args[0].(*gofins.Client)
 		}
 		run(
 			arg0,
@@ -3323,13 +3325,13 @@ func (_c *MockConnectionPlugin_OnConnected_Call) Return(err error) *MockConnecti
 	return _c
 }
 
-func (_c *MockConnectionPlugin_OnConnected_Call) RunAndReturn(run func(client *Client) error) *MockConnectionPlugin_OnConnected_Call {
+func (_c *MockConnectionPlugin_OnConnected_Call) RunAndReturn(run func(client *gofins.Client) error) *MockConnectionPlugin_OnConnected_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // OnDisconnected provides a mock function for the type MockConnectionPlugin
-func (_mock *MockConnectionPlugin) OnDisconnected(client *Client, err error) error {
+func (_mock *MockConnectionPlugin) OnDisconnected(client *gofins.Client, err error) error {
 	ret := _mock.Called(client, err)
 
 	if len(ret) == 0 {
@@ -3337,7 +3339,7 @@ func (_mock *MockConnectionPlugin) OnDisconnected(client *Client, err error) err
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(*Client, error) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(*gofins.Client, error) error); ok {
 		r0 = returnFunc(client, err)
 	} else {
 		r0 = ret.Error(0)
@@ -3351,17 +3353,17 @@ type MockConnectionPlugin_OnDisconnected_Call struct {
 }
 
 // OnDisconnected is a helper method to define mock.On call
-//   - client *Client
+//   - client *gofins.Client
 //   - err error
 func (_e *MockConnectionPlugin_Expecter) OnDisconnected(client interface{}, err interface{}) *MockConnectionPlugin_OnDisconnected_Call {
 	return &MockConnectionPlugin_OnDisconnected_Call{Call: _e.mock.On("OnDisconnected", client, err)}
 }
 
-func (_c *MockConnectionPlugin_OnDisconnected_Call) Run(run func(client *Client, err error)) *MockConnectionPlugin_OnDisconnected_Call {
+func (_c *MockConnectionPlugin_OnDisconnected_Call) Run(run func(client *gofins.Client, err error)) *MockConnectionPlugin_OnDisconnected_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 *Client
+		var arg0 *gofins.Client
 		if args[0] != nil {
-			arg0 = args[0].(*Client)
+			arg0 = args[0].(*gofins.Client)
 		}
 		var arg1 error
 		if args[1] != nil {
@@ -3380,7 +3382,289 @@ func (_c *MockConnectionPlugin_OnDisconnected_Call) Return(err1 error) *MockConn
 	return _c
 }
 
-func (_c *MockConnectionPlugin_OnDisconnected_Call) RunAndReturn(run func(client *Client, err error) error) *MockConnectionPlugin_OnDisconnected_Call {
+func (_c *MockConnectionPlugin_OnDisconnected_Call) RunAndReturn(run func(client *gofins.Client, err error) error) *MockConnectionPlugin_OnDisconnected_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// newMocktransport creates a new instance of mocktransport. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
+// The first argument is typically a *testing.T value.
+func newMocktransport(t interface {
+	mock.TestingT
+	Cleanup(func())
+}) *mocktransport {
+	mock := &mocktransport{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
+}
+
+// mocktransport is an autogenerated mock type for the transport type
+type mocktransport struct {
+	mock.Mock
+}
+
+type mocktransport_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *mocktransport) EXPECT() *mocktransport_Expecter {
+	return &mocktransport_Expecter{mock: &_m.Mock}
+}
+
+// Close provides a mock function for the type mocktransport
+func (_mock *mocktransport) Close() error {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Close")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func() error); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// mocktransport_Close_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Close'
+type mocktransport_Close_Call struct {
+	*mock.Call
+}
+
+// Close is a helper method to define mock.On call
+func (_e *mocktransport_Expecter) Close() *mocktransport_Close_Call {
+	return &mocktransport_Close_Call{Call: _e.mock.On("Close")}
+}
+
+func (_c *mocktransport_Close_Call) Run(run func()) *mocktransport_Close_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *mocktransport_Close_Call) Return(err error) *mocktransport_Close_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *mocktransport_Close_Call) RunAndReturn(run func() error) *mocktransport_Close_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// LocalAddr provides a mock function for the type mocktransport
+func (_mock *mocktransport) LocalAddr() net.Addr {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for LocalAddr")
+	}
+
+	var r0 net.Addr
+	if returnFunc, ok := ret.Get(0).(func() net.Addr); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(net.Addr)
+		}
+	}
+	return r0
+}
+
+// mocktransport_LocalAddr_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LocalAddr'
+type mocktransport_LocalAddr_Call struct {
+	*mock.Call
+}
+
+// LocalAddr is a helper method to define mock.On call
+func (_e *mocktransport_Expecter) LocalAddr() *mocktransport_LocalAddr_Call {
+	return &mocktransport_LocalAddr_Call{Call: _e.mock.On("LocalAddr")}
+}
+
+func (_c *mocktransport_LocalAddr_Call) Run(run func()) *mocktransport_LocalAddr_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *mocktransport_LocalAddr_Call) Return(addr net.Addr) *mocktransport_LocalAddr_Call {
+	_c.Call.Return(addr)
+	return _c
+}
+
+func (_c *mocktransport_LocalAddr_Call) RunAndReturn(run func() net.Addr) *mocktransport_LocalAddr_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Recv provides a mock function for the type mocktransport
+func (_mock *mocktransport) Recv(ctx context.Context) ([]byte, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Recv")
+	}
+
+	var r0 []byte
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]byte, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) []byte); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// mocktransport_Recv_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Recv'
+type mocktransport_Recv_Call struct {
+	*mock.Call
+}
+
+// Recv is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *mocktransport_Expecter) Recv(ctx interface{}) *mocktransport_Recv_Call {
+	return &mocktransport_Recv_Call{Call: _e.mock.On("Recv", ctx)}
+}
+
+func (_c *mocktransport_Recv_Call) Run(run func(ctx context.Context)) *mocktransport_Recv_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *mocktransport_Recv_Call) Return(bytes []byte, err error) *mocktransport_Recv_Call {
+	_c.Call.Return(bytes, err)
+	return _c
+}
+
+func (_c *mocktransport_Recv_Call) RunAndReturn(run func(ctx context.Context) ([]byte, error)) *mocktransport_Recv_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RemoteAddr provides a mock function for the type mocktransport
+func (_mock *mocktransport) RemoteAddr() net.Addr {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for RemoteAddr")
+	}
+
+	var r0 net.Addr
+	if returnFunc, ok := ret.Get(0).(func() net.Addr); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(net.Addr)
+		}
+	}
+	return r0
+}
+
+// mocktransport_RemoteAddr_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoteAddr'
+type mocktransport_RemoteAddr_Call struct {
+	*mock.Call
+}
+
+// RemoteAddr is a helper method to define mock.On call
+func (_e *mocktransport_Expecter) RemoteAddr() *mocktransport_RemoteAddr_Call {
+	return &mocktransport_RemoteAddr_Call{Call: _e.mock.On("RemoteAddr")}
+}
+
+func (_c *mocktransport_RemoteAddr_Call) Run(run func()) *mocktransport_RemoteAddr_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *mocktransport_RemoteAddr_Call) Return(addr net.Addr) *mocktransport_RemoteAddr_Call {
+	_c.Call.Return(addr)
+	return _c
+}
+
+func (_c *mocktransport_RemoteAddr_Call) RunAndReturn(run func() net.Addr) *mocktransport_RemoteAddr_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Send provides a mock function for the type mocktransport
+func (_mock *mocktransport) Send(ctx context.Context, payload []byte) error {
+	ret := _mock.Called(ctx, payload)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Send")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) error); ok {
+		r0 = returnFunc(ctx, payload)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// mocktransport_Send_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Send'
+type mocktransport_Send_Call struct {
+	*mock.Call
+}
+
+// Send is a helper method to define mock.On call
+//   - ctx context.Context
+//   - payload []byte
+func (_e *mocktransport_Expecter) Send(ctx interface{}, payload interface{}) *mocktransport_Send_Call {
+	return &mocktransport_Send_Call{Call: _e.mock.On("Send", ctx, payload)}
+}
+
+func (_c *mocktransport_Send_Call) Run(run func(ctx context.Context, payload []byte)) *mocktransport_Send_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []byte
+		if args[1] != nil {
+			arg1 = args[1].([]byte)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *mocktransport_Send_Call) Return(err error) *mocktransport_Send_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *mocktransport_Send_Call) RunAndReturn(run func(ctx context.Context, payload []byte) error) *mocktransport_Send_Call {
 	_c.Call.Return(run)
 	return _c
 }

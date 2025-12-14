@@ -1,8 +1,10 @@
 package gofins
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -13,10 +15,26 @@ const (
 	SERVER_BUFFER_SIZE = 1024  // UDP receive buffer size
 )
 
+type serverConfig struct {
+	transport transportKind
+}
+
+// ServerOption configures the PLC simulator.
+type ServerOption func(*serverConfig)
+
+// WithTCPTransport switches the simulator to FINS/TCP instead of UDP.
+func WithTCPTransport() ServerOption {
+	return func(cfg *serverConfig) {
+		cfg.transport = transportTCP
+	}
+}
+
 // Server Omron FINS server (PLC emulator)
 type Server struct {
 	addr       Address
 	conn       *net.UDPConn
+	ln         *net.TCPListener
+	transport  transportKind
 	dmarea     []byte
 	bitdmarea  []byte
 	closed     bool
@@ -26,21 +44,41 @@ type Server struct {
 }
 
 // NewPLCSimulator creates a new PLC simulator
-func NewPLCSimulator(plcAddr Address) (*Server, error) {
+func NewPLCSimulator(plcAddr Address, opts ...ServerOption) (*Server, error) {
+	cfg := serverConfig{transport: transportUDP}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	s := new(Server)
+	s.transport = cfg.transport
 	s.addr = plcAddr
 	s.dmarea = make([]byte, DM_AREA_SIZE)
 	s.bitdmarea = make([]byte, DM_AREA_SIZE)
 	s.errChan = make(chan error, ERROR_CHANNEL_BUFFER)
 	s.done = make(chan struct{})
 
-	conn, err := net.ListenUDP("udp", plcAddr.UdpAddress)
-	if err != nil {
-		return nil, err
+	switch cfg.transport {
+	case transportUDP:
+		conn, err := net.ListenUDP("udp", plcAddr.UdpAddress)
+		if err != nil {
+			return nil, err
+		}
+		s.conn = conn
+		go s.udpLoop()
+	case transportTCP:
+		if plcAddr.TcpAddress == nil {
+			return nil, fmt.Errorf("TCP address is required for TCP simulator")
+		}
+		ln, err := net.ListenTCP("tcp", plcAddr.TcpAddress)
+		if err != nil {
+			return nil, err
+		}
+		s.ln = ln
+		go s.tcpAcceptLoop()
+	default:
+		return nil, fmt.Errorf("unsupported simulator transport")
 	}
-	s.conn = conn
-
-	go s.serverLoop()
 
 	return s, nil
 }
@@ -69,10 +107,20 @@ func (s *Server) Close() error {
 	s.closeMutex.Unlock()
 
 	close(s.done)
-	return s.conn.Close()
+	switch s.transport {
+	case transportUDP:
+		if s.conn != nil {
+			return s.conn.Close()
+		}
+	case transportTCP:
+		if s.ln != nil {
+			return s.ln.Close()
+		}
+	}
+	return nil
 }
 
-func (s *Server) serverLoop() {
+func (s *Server) udpLoop() {
 	defer close(s.errChan)
 
 	var buf [SERVER_BUFFER_SIZE]byte
@@ -180,4 +228,90 @@ func encodeClock(t time.Time) []byte {
 func bcdByte(v int) byte {
 	v = v % 100
 	return byte((v/10)<<4 | (v % 10))
+}
+
+// TCP helpers
+
+func (s *Server) tcpAcceptLoop() {
+	defer close(s.errChan)
+
+	for {
+		conn, err := s.ln.AcceptTCP()
+		if err != nil {
+			if s.IsClosed() {
+				return
+			}
+			s.errChan <- fmt.Errorf("accept error: %w", err)
+			return
+		}
+		go s.handleTCPConn(conn)
+	}
+}
+
+func (s *Server) handleTCPConn(conn *net.TCPConn) {
+	defer conn.Close()
+	reader := bufio.NewReader(conn)
+
+	// Handshake
+	msg, err := readTCPMessage(reader)
+	if err != nil {
+		if !s.IsClosed() {
+			s.errChan <- fmt.Errorf("handshake read error: %w", err)
+		}
+		return
+	}
+	if msg.command != finsTCPHandshakeCommand {
+		return
+	}
+	if _, err := conn.Write(finsTCPFrame(finsTCPHandshakeCommand, nil)); err != nil {
+		if !s.IsClosed() {
+			s.errChan <- fmt.Errorf("handshake write error: %w", err)
+		}
+		return
+	}
+
+	for {
+		msg, err := readTCPMessage(reader)
+		if err != nil {
+			if !s.IsClosed() {
+				s.errChan <- fmt.Errorf("read error: %w", err)
+			}
+			return
+		}
+		if msg.command != finsTCPDataCommand {
+			continue
+		}
+		req := decodeRequest(msg.body)
+		resp := s.handler(req)
+		frame := finsTCPFrame(finsTCPDataCommand, encodeResponse(resp))
+		if _, err := conn.Write(frame); err != nil {
+			if !s.IsClosed() {
+				s.errChan <- fmt.Errorf("write error: %w", err)
+			}
+			return
+		}
+	}
+}
+
+func readTCPMessage(reader *bufio.Reader) (*finsTCPMessage, error) {
+	header := make([]byte, 8)
+	if _, err := io.ReadFull(reader, header); err != nil {
+		return nil, err
+	}
+	if string(header[:4]) != finsTCPSignature {
+		return nil, fmt.Errorf("invalid FINS/TCP signature: %q", header[:4])
+	}
+	length := binary.BigEndian.Uint32(header[4:8])
+	if length < 8 {
+		return nil, fmt.Errorf("invalid FINS/TCP length: %d", length)
+	}
+	body := make([]byte, length)
+	if _, err := io.ReadFull(reader, body); err != nil {
+		return nil, err
+	}
+	return &finsTCPMessage{
+		command:   binary.BigEndian.Uint32(body[0:4]),
+		errorCode: binary.BigEndian.Uint32(body[4:8]),
+		body:      body[8:],
+	}, nil
 }
