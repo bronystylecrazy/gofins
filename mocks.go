@@ -219,6 +219,39 @@ func (_c *MockAutoReconnect_DisableAutoReconnect_Call) RunAndReturn(run func()) 
 	return _c
 }
 
+// DisableDynamicLocalAddress provides a mock function for the type MockAutoReconnect
+func (_mock *MockAutoReconnect) DisableDynamicLocalAddress() {
+	_mock.Called()
+	return
+}
+
+// MockAutoReconnect_DisableDynamicLocalAddress_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DisableDynamicLocalAddress'
+type MockAutoReconnect_DisableDynamicLocalAddress_Call struct {
+	*mock.Call
+}
+
+// DisableDynamicLocalAddress is a helper method to define mock.On call
+func (_e *MockAutoReconnect_Expecter) DisableDynamicLocalAddress() *MockAutoReconnect_DisableDynamicLocalAddress_Call {
+	return &MockAutoReconnect_DisableDynamicLocalAddress_Call{Call: _e.mock.On("DisableDynamicLocalAddress")}
+}
+
+func (_c *MockAutoReconnect_DisableDynamicLocalAddress_Call) Run(run func()) *MockAutoReconnect_DisableDynamicLocalAddress_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockAutoReconnect_DisableDynamicLocalAddress_Call) Return() *MockAutoReconnect_DisableDynamicLocalAddress_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockAutoReconnect_DisableDynamicLocalAddress_Call) RunAndReturn(run func()) *MockAutoReconnect_DisableDynamicLocalAddress_Call {
+	_c.Run(run)
+	return _c
+}
+
 // EnableAutoReconnect provides a mock function for the type MockAutoReconnect
 func (_mock *MockAutoReconnect) EnableAutoReconnect(maxRetries int, initialDelay time.Duration) {
 	_mock.Called(maxRetries, initialDelay)
@@ -261,6 +294,39 @@ func (_c *MockAutoReconnect_EnableAutoReconnect_Call) Return() *MockAutoReconnec
 }
 
 func (_c *MockAutoReconnect_EnableAutoReconnect_Call) RunAndReturn(run func(maxRetries int, initialDelay time.Duration)) *MockAutoReconnect_EnableAutoReconnect_Call {
+	_c.Run(run)
+	return _c
+}
+
+// EnableDynamicLocalAddress provides a mock function for the type MockAutoReconnect
+func (_mock *MockAutoReconnect) EnableDynamicLocalAddress() {
+	_mock.Called()
+	return
+}
+
+// MockAutoReconnect_EnableDynamicLocalAddress_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EnableDynamicLocalAddress'
+type MockAutoReconnect_EnableDynamicLocalAddress_Call struct {
+	*mock.Call
+}
+
+// EnableDynamicLocalAddress is a helper method to define mock.On call
+func (_e *MockAutoReconnect_Expecter) EnableDynamicLocalAddress() *MockAutoReconnect_EnableDynamicLocalAddress_Call {
+	return &MockAutoReconnect_EnableDynamicLocalAddress_Call{Call: _e.mock.On("EnableDynamicLocalAddress")}
+}
+
+func (_c *MockAutoReconnect_EnableDynamicLocalAddress_Call) Run(run func()) *MockAutoReconnect_EnableDynamicLocalAddress_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockAutoReconnect_EnableDynamicLocalAddress_Call) Return() *MockAutoReconnect_EnableDynamicLocalAddress_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockAutoReconnect_EnableDynamicLocalAddress_Call) RunAndReturn(run func()) *MockAutoReconnect_EnableDynamicLocalAddress_Call {
 	_c.Run(run)
 	return _c
 }
@@ -1628,6 +1694,39 @@ func (_c *MockFINSClient_DisableAutoReconnect_Call) RunAndReturn(run func()) *Mo
 	return _c
 }
 
+// DisableDynamicLocalAddress provides a mock function for the type MockFINSClient
+func (_mock *MockFINSClient) DisableDynamicLocalAddress() {
+	_mock.Called()
+	return
+}
+
+// MockFINSClient_DisableDynamicLocalAddress_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DisableDynamicLocalAddress'
+type MockFINSClient_DisableDynamicLocalAddress_Call struct {
+	*mock.Call
+}
+
+// DisableDynamicLocalAddress is a helper method to define mock.On call
+func (_e *MockFINSClient_Expecter) DisableDynamicLocalAddress() *MockFINSClient_DisableDynamicLocalAddress_Call {
+	return &MockFINSClient_DisableDynamicLocalAddress_Call{Call: _e.mock.On("DisableDynamicLocalAddress")}
+}
+
+func (_c *MockFINSClient_DisableDynamicLocalAddress_Call) Run(run func()) *MockFINSClient_DisableDynamicLocalAddress_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockFINSClient_DisableDynamicLocalAddress_Call) Return() *MockFINSClient_DisableDynamicLocalAddress_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockFINSClient_DisableDynamicLocalAddress_Call) RunAndReturn(run func()) *MockFINSClient_DisableDynamicLocalAddress_Call {
+	_c.Run(run)
+	return _c
+}
+
 // EnableAutoReconnect provides a mock function for the type MockFINSClient
 func (_mock *MockFINSClient) EnableAutoReconnect(maxRetries int, initialDelay time.Duration) {
 	_mock.Called(maxRetries, initialDelay)
@@ -1670,6 +1769,39 @@ func (_c *MockFINSClient_EnableAutoReconnect_Call) Return() *MockFINSClient_Enab
 }
 
 func (_c *MockFINSClient_EnableAutoReconnect_Call) RunAndReturn(run func(maxRetries int, initialDelay time.Duration)) *MockFINSClient_EnableAutoReconnect_Call {
+	_c.Run(run)
+	return _c
+}
+
+// EnableDynamicLocalAddress provides a mock function for the type MockFINSClient
+func (_mock *MockFINSClient) EnableDynamicLocalAddress() {
+	_mock.Called()
+	return
+}
+
+// MockFINSClient_EnableDynamicLocalAddress_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EnableDynamicLocalAddress'
+type MockFINSClient_EnableDynamicLocalAddress_Call struct {
+	*mock.Call
+}
+
+// EnableDynamicLocalAddress is a helper method to define mock.On call
+func (_e *MockFINSClient_Expecter) EnableDynamicLocalAddress() *MockFINSClient_EnableDynamicLocalAddress_Call {
+	return &MockFINSClient_EnableDynamicLocalAddress_Call{Call: _e.mock.On("EnableDynamicLocalAddress")}
+}
+
+func (_c *MockFINSClient_EnableDynamicLocalAddress_Call) Run(run func()) *MockFINSClient_EnableDynamicLocalAddress_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockFINSClient_EnableDynamicLocalAddress_Call) Return() *MockFINSClient_EnableDynamicLocalAddress_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockFINSClient_EnableDynamicLocalAddress_Call) RunAndReturn(run func()) *MockFINSClient_EnableDynamicLocalAddress_Call {
 	_c.Run(run)
 	return _c
 }
@@ -3019,6 +3151,236 @@ func (_c *MockPlugin_Name_Call) Return(s string) *MockPlugin_Name_Call {
 }
 
 func (_c *MockPlugin_Name_Call) RunAndReturn(run func() string) *MockPlugin_Name_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// NewMockConnectionPlugin creates a new instance of MockConnectionPlugin. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
+// The first argument is typically a *testing.T value.
+func NewMockConnectionPlugin(t interface {
+	mock.TestingT
+	Cleanup(func())
+}) *MockConnectionPlugin {
+	mock := &MockConnectionPlugin{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
+}
+
+// MockConnectionPlugin is an autogenerated mock type for the ConnectionPlugin type
+type MockConnectionPlugin struct {
+	mock.Mock
+}
+
+type MockConnectionPlugin_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *MockConnectionPlugin) EXPECT() *MockConnectionPlugin_Expecter {
+	return &MockConnectionPlugin_Expecter{mock: &_m.Mock}
+}
+
+// Initialize provides a mock function for the type MockConnectionPlugin
+func (_mock *MockConnectionPlugin) Initialize(client *Client) error {
+	ret := _mock.Called(client)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Initialize")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*Client) error); ok {
+		r0 = returnFunc(client)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockConnectionPlugin_Initialize_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Initialize'
+type MockConnectionPlugin_Initialize_Call struct {
+	*mock.Call
+}
+
+// Initialize is a helper method to define mock.On call
+//   - client *Client
+func (_e *MockConnectionPlugin_Expecter) Initialize(client interface{}) *MockConnectionPlugin_Initialize_Call {
+	return &MockConnectionPlugin_Initialize_Call{Call: _e.mock.On("Initialize", client)}
+}
+
+func (_c *MockConnectionPlugin_Initialize_Call) Run(run func(client *Client)) *MockConnectionPlugin_Initialize_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *Client
+		if args[0] != nil {
+			arg0 = args[0].(*Client)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockConnectionPlugin_Initialize_Call) Return(err error) *MockConnectionPlugin_Initialize_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockConnectionPlugin_Initialize_Call) RunAndReturn(run func(client *Client) error) *MockConnectionPlugin_Initialize_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Name provides a mock function for the type MockConnectionPlugin
+func (_mock *MockConnectionPlugin) Name() string {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Name")
+	}
+
+	var r0 string
+	if returnFunc, ok := ret.Get(0).(func() string); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	return r0
+}
+
+// MockConnectionPlugin_Name_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Name'
+type MockConnectionPlugin_Name_Call struct {
+	*mock.Call
+}
+
+// Name is a helper method to define mock.On call
+func (_e *MockConnectionPlugin_Expecter) Name() *MockConnectionPlugin_Name_Call {
+	return &MockConnectionPlugin_Name_Call{Call: _e.mock.On("Name")}
+}
+
+func (_c *MockConnectionPlugin_Name_Call) Run(run func()) *MockConnectionPlugin_Name_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockConnectionPlugin_Name_Call) Return(s string) *MockConnectionPlugin_Name_Call {
+	_c.Call.Return(s)
+	return _c
+}
+
+func (_c *MockConnectionPlugin_Name_Call) RunAndReturn(run func() string) *MockConnectionPlugin_Name_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// OnConnected provides a mock function for the type MockConnectionPlugin
+func (_mock *MockConnectionPlugin) OnConnected(client *Client) error {
+	ret := _mock.Called(client)
+
+	if len(ret) == 0 {
+		panic("no return value specified for OnConnected")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*Client) error); ok {
+		r0 = returnFunc(client)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockConnectionPlugin_OnConnected_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'OnConnected'
+type MockConnectionPlugin_OnConnected_Call struct {
+	*mock.Call
+}
+
+// OnConnected is a helper method to define mock.On call
+//   - client *Client
+func (_e *MockConnectionPlugin_Expecter) OnConnected(client interface{}) *MockConnectionPlugin_OnConnected_Call {
+	return &MockConnectionPlugin_OnConnected_Call{Call: _e.mock.On("OnConnected", client)}
+}
+
+func (_c *MockConnectionPlugin_OnConnected_Call) Run(run func(client *Client)) *MockConnectionPlugin_OnConnected_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *Client
+		if args[0] != nil {
+			arg0 = args[0].(*Client)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockConnectionPlugin_OnConnected_Call) Return(err error) *MockConnectionPlugin_OnConnected_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockConnectionPlugin_OnConnected_Call) RunAndReturn(run func(client *Client) error) *MockConnectionPlugin_OnConnected_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// OnDisconnected provides a mock function for the type MockConnectionPlugin
+func (_mock *MockConnectionPlugin) OnDisconnected(client *Client, err error) error {
+	ret := _mock.Called(client, err)
+
+	if len(ret) == 0 {
+		panic("no return value specified for OnDisconnected")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*Client, error) error); ok {
+		r0 = returnFunc(client, err)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockConnectionPlugin_OnDisconnected_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'OnDisconnected'
+type MockConnectionPlugin_OnDisconnected_Call struct {
+	*mock.Call
+}
+
+// OnDisconnected is a helper method to define mock.On call
+//   - client *Client
+//   - err error
+func (_e *MockConnectionPlugin_Expecter) OnDisconnected(client interface{}, err interface{}) *MockConnectionPlugin_OnDisconnected_Call {
+	return &MockConnectionPlugin_OnDisconnected_Call{Call: _e.mock.On("OnDisconnected", client, err)}
+}
+
+func (_c *MockConnectionPlugin_OnDisconnected_Call) Run(run func(client *Client, err error)) *MockConnectionPlugin_OnDisconnected_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *Client
+		if args[0] != nil {
+			arg0 = args[0].(*Client)
+		}
+		var arg1 error
+		if args[1] != nil {
+			arg1 = args[1].(error)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockConnectionPlugin_OnDisconnected_Call) Return(err1 error) *MockConnectionPlugin_OnDisconnected_Call {
+	_c.Call.Return(err1)
+	return _c
+}
+
+func (_c *MockConnectionPlugin_OnDisconnected_Call) RunAndReturn(run func(client *Client, err error) error) *MockConnectionPlugin_OnDisconnected_Call {
 	_c.Call.Return(run)
 	return _c
 }
