@@ -55,14 +55,15 @@ type Client struct {
 	done              chan struct{}
 
 	// Auto-reconnect configuration
-	autoReconnect  bool
-	maxReconnect   int
-	reconnectDelay time.Duration
-	reconnecting   bool
-	reconnectMutex sync.RWMutex
-	connected      chan struct{} // Closed when connected, recreated when disconnected
-	connectedMutex sync.Mutex
-	dynamicLocal   bool // Re-detect local bind address on reconnect
+	autoReconnect       bool
+	maxReconnect        int
+	reconnectDelay      time.Duration
+	useReconnectBackoff bool
+	reconnecting        bool
+	reconnectMutex      sync.RWMutex
+	connected           chan struct{} // Closed when connected, recreated when disconnected
+	connectedMutex      sync.Mutex
+	dynamicLocal        bool // Re-detect local bind address on reconnect
 
 	// Interceptor for all operations
 	interceptor      Interceptor
@@ -94,6 +95,7 @@ func NewUDPClient(localAddr, plcAddr Address) (*Client, error) {
 	c.autoReconnect = false
 	c.maxReconnect = DEFAULT_MAX_RECONNECT
 	c.reconnectDelay = DEFAULT_RECONNECT_DELAY
+	c.useReconnectBackoff = true
 	c.connected = make(chan struct{})
 
 	tr, err := newUDPTransport(localAddr.UdpAddress, plcAddr.UdpAddress)
@@ -145,6 +147,7 @@ func NewTCPClient(localAddr, plcAddr Address) (*Client, error) {
 	c.autoReconnect = false
 	c.maxReconnect = DEFAULT_MAX_RECONNECT
 	c.reconnectDelay = DEFAULT_RECONNECT_DELAY
+	c.useReconnectBackoff = true
 	c.connected = make(chan struct{})
 
 	if c.remoteTCPAddr == nil {
@@ -209,6 +212,7 @@ func (c *Client) EnableAutoReconnect(maxRetries int, initialDelay time.Duration)
 	c.autoReconnect = true
 	c.maxReconnect = maxRetries
 	c.reconnectDelay = initialDelay
+	c.useReconnectBackoff = true
 }
 
 // DisableAutoReconnect disables automatic reconnection
@@ -216,6 +220,20 @@ func (c *Client) DisableAutoReconnect() {
 	c.reconnectMutex.Lock()
 	defer c.reconnectMutex.Unlock()
 	c.autoReconnect = false
+}
+
+// DisableReconnectBackoff forces reconnection attempts to use a fixed delay (no exponential backoff).
+func (c *Client) DisableReconnectBackoff() {
+	c.reconnectMutex.Lock()
+	defer c.reconnectMutex.Unlock()
+	c.useReconnectBackoff = false
+}
+
+// EnableReconnectBackoff restores exponential backoff for reconnection attempts.
+func (c *Client) EnableReconnectBackoff() {
+	c.reconnectMutex.Lock()
+	defer c.reconnectMutex.Unlock()
+	c.useReconnectBackoff = true
 }
 
 // EnableDynamicLocalAddress enables re-detecting the local bind address on reconnect.
@@ -391,6 +409,10 @@ func (c *Client) reconnect() error {
 	c.reconnecting = true
 	maxRetries := c.maxReconnect
 	delay := c.reconnectDelay
+	backoff := c.useReconnectBackoff
+	if !backoff {
+		delay = 0 // immediate retries when backoff is disabled
+	}
 	c.reconnectMutex.Unlock()
 
 	defer func() {
@@ -424,12 +446,14 @@ func (c *Client) reconnect() error {
 		attempts++
 
 		// Wait before retry (exponential backoff)
-		if attempts > 1 {
+		if attempts > 1 && delay > 0 {
 			time.Sleep(delay)
-			// Exponential backoff with max cap
-			delay *= 2
-			if delay > MAX_RECONNECT_DELAY {
-				delay = MAX_RECONNECT_DELAY
+			if backoff {
+				// Exponential backoff with max cap
+				delay *= 2
+				if delay > MAX_RECONNECT_DELAY {
+					delay = MAX_RECONNECT_DELAY
+				}
 			}
 		}
 

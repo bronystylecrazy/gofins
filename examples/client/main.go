@@ -135,6 +135,7 @@ func main() {
 	execInterval := flag.Duration("exec-interval", 0, "If set with -exec, repeat the command with this interval (e.g., 500ms)")
 	autoReconnect := flag.Bool("auto-reconnect", true, "Enable auto-reconnect")
 	autoReconnectDelay := flag.Duration("auto-reconnect-delay", time.Second, "Initial delay for auto-reconnect backoff")
+	noReconnectBackoff := flag.Bool("no-reconnect-backoff", false, "Disable exponential backoff; reuse the initial delay for every reconnect")
 	format := flag.String("format", "text", "Output format: text|json")
 	quiet := flag.Bool("quiet", false, "Quiet output (suppress info, show only command output)")
 	tcp := flag.Bool("tcp", false, "Use FINS over TCP instead of UDP")
@@ -208,6 +209,9 @@ func main() {
 	client.SetTimeoutMs(*respTimeout)
 	if *autoReconnect {
 		client.EnableAutoReconnect(0, *autoReconnectDelay) // 0 = infinite retries
+		if *noReconnectBackoff {
+			client.DisableReconnectBackoff()
+		}
 	}
 	defer client.Close()
 

@@ -139,6 +139,7 @@ go run ./examples/client \
 ``` 
 
 Add `-tcp` to talk FINS/TCP instead of UDP (useful with the simulator's `-tcp` flag).
+Use `-no-reconnect-backoff` to retry immediately (delay=0) instead of exponential backoff; combine with `-auto-reconnect-delay` if you want a fixed sleep instead.
 
 Once running, try commands such as:
 - `readwords dm 100 3`
