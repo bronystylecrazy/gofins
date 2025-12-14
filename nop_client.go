@@ -16,6 +16,8 @@ func (NopClient) SetReadTimeout(time.Duration)           {}
 func (NopClient) EnableAutoReconnect(int, time.Duration) {}
 func (NopClient) DisableAutoReconnect()                  {}
 func (NopClient) IsReconnecting() bool                   { return false }
+func (NopClient) EnableDynamicLocalAddress()             {}
+func (NopClient) DisableDynamicLocalAddress()            {}
 func (NopClient) SetInterceptor(Interceptor)             {}
 func (NopClient) Use(...Plugin) error                    { return nil }
 func (NopClient) IsClosed() bool                         { return false }

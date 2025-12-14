@@ -67,6 +67,33 @@ func (o output) print(label string, v interface{}) error {
 	}
 }
 
+func (o output) printWithRTT(label string, v interface{}, rtt time.Duration) error {
+	if o.quiet {
+		label = ""
+	}
+	switch o.mode {
+	case outputText:
+		if label != "" {
+			fmt.Printf("%s: %v (%dms)\n", label, v, rtt.Milliseconds())
+		} else {
+			fmt.Printf("%v (%dms)\n", v, rtt.Milliseconds())
+		}
+		return nil
+	case outputJSON:
+		type wrapped struct {
+			Label   string      `json:"label,omitempty"`
+			Result  interface{} `json:"result"`
+			RTTMsec int64       `json:"rtt_ms"`
+		}
+		w := wrapped{Label: label, Result: v, RTTMsec: rtt.Milliseconds()}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(w)
+	default:
+		return fmt.Errorf("unknown output mode")
+	}
+}
+
 func (o output) printError(err error) {
 	if err == nil {
 		return
@@ -153,6 +180,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create client: %v", err)
 	}
+	// When network interfaces change (e.g., VPN toggles), re-detect the best local bind address.
+	client.EnableDynamicLocalAddress()
 	client.SetTimeoutMs(*respTimeout)
 	if *autoReconnect {
 		client.EnableAutoReconnect(0, *autoReconnectDelay) // 0 = infinite retries
@@ -270,6 +299,7 @@ func detectLocalAddr(remote string) (string, int, error) {
 }
 
 func handleCommand(ctx context.Context, out output, client *fins.Client, cmd string, args []string) error {
+	start := time.Now()
 	switch cmd {
 	case "readw", "readwords":
 		if len(args) != 3 {
@@ -291,7 +321,7 @@ func handleCommand(ctx context.Context, out output, client *fins.Client, cmd str
 		if err != nil {
 			return err
 		}
-		return out.print("words", data)
+		return out.printWithRTT("words", data, time.Since(start))
 
 	case "readb", "readbytes":
 		if len(args) != 3 {
@@ -313,7 +343,7 @@ func handleCommand(ctx context.Context, out output, client *fins.Client, cmd str
 		if err != nil {
 			return err
 		}
-		return out.print("bytes", data)
+		return out.printWithRTT("bytes", data, time.Since(start))
 
 	case "readbits":
 		if len(args) != 4 {
@@ -339,7 +369,7 @@ func handleCommand(ctx context.Context, out output, client *fins.Client, cmd str
 		if err != nil {
 			return err
 		}
-		return out.print("bits", data)
+		return out.printWithRTT("bits", data, time.Since(start))
 
 	case "writew", "writewords":
 		if len(args) < 3 {
@@ -360,7 +390,7 @@ func handleCommand(ctx context.Context, out output, client *fins.Client, cmd str
 		if err := client.WriteWords(ctx, area, address, values); err != nil {
 			return err
 		}
-		return out.print("writewords", "ok")
+		return out.printWithRTT("writewords", "ok", time.Since(start))
 
 	case "writeb", "writebytes":
 		if len(args) < 3 {
@@ -381,7 +411,7 @@ func handleCommand(ctx context.Context, out output, client *fins.Client, cmd str
 		if err := client.WriteBytes(ctx, area, address, values); err != nil {
 			return err
 		}
-		return out.print("writebytes", "ok")
+		return out.printWithRTT("writebytes", "ok", time.Since(start))
 
 	case "writebits":
 		if len(args) < 4 {
@@ -406,14 +436,14 @@ func handleCommand(ctx context.Context, out output, client *fins.Client, cmd str
 		if err := client.WriteBits(ctx, area, address, bitOffset, values); err != nil {
 			return err
 		}
-		return out.print("writebits", "ok")
+		return out.printWithRTT("writebits", "ok", time.Since(start))
 
 	case "clock", "readclock":
 		t, err := client.ReadClock(ctx)
 		if err != nil {
 			return err
 		}
-		return out.print("clock", t.Format(time.RFC3339))
+		return out.printWithRTT("clock", t.Format(time.RFC3339), time.Since(start))
 
 	default:
 		if !out.quiet {

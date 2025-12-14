@@ -34,6 +34,7 @@ type Client struct {
 	dst               FinsAddress
 	src               FinsAddress
 	localAddr         *net.UDPAddr // Store for reconnection
+	localAddrMutex    sync.RWMutex
 	remoteAddr        *net.UDPAddr // Store for reconnection
 	sid               byte
 	closed            bool
@@ -52,6 +53,7 @@ type Client struct {
 	reconnectMutex sync.RWMutex
 	connected      chan struct{} // Closed when connected, recreated when disconnected
 	connectedMutex sync.Mutex
+	dynamicLocal   bool // Re-detect local bind address on reconnect
 
 	// Interceptor for all operations
 	interceptor      Interceptor
@@ -73,6 +75,10 @@ func NewClient(localAddr, plcAddr Address) (*Client, error) {
 	c.byteOrder = binary.BigEndian
 	c.listenErr = make(chan error, ERROR_CHANNEL_BUFFER)
 	c.done = make(chan struct{})
+	// Enable dynamic local detection when the caller left host/port unspecified.
+	if localAddr.UdpAddress == nil || localAddr.UdpAddress.IP == nil || localAddr.UdpAddress.IP.IsUnspecified() || localAddr.UdpAddress.Port == 0 {
+		c.dynamicLocal = true
+	}
 
 	// Auto-reconnect defaults (disabled by default)
 	c.autoReconnect = false
@@ -85,6 +91,12 @@ func NewClient(localAddr, plcAddr Address) (*Client, error) {
 		return nil, err
 	}
 	c.conn = conn
+	// Record the actual local address in case the OS chose one.
+	if la, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+		c.localAddrMutex.Lock()
+		c.localAddr = la
+		c.localAddrMutex.Unlock()
+	}
 
 	c.resp = make([]chan response, MAX_SERVICE_ID_COUNT)
 	go c.listenLoop()
@@ -141,6 +153,21 @@ func (c *Client) DisableAutoReconnect() {
 	c.autoReconnect = false
 }
 
+// EnableDynamicLocalAddress enables re-detecting the local bind address on reconnect.
+// Useful when network interfaces change (e.g., VPN up/down).
+func (c *Client) EnableDynamicLocalAddress() {
+	c.reconnectMutex.Lock()
+	c.dynamicLocal = true
+	c.reconnectMutex.Unlock()
+}
+
+// DisableDynamicLocalAddress locks the client to the current local address on reconnect.
+func (c *Client) DisableDynamicLocalAddress() {
+	c.reconnectMutex.Lock()
+	c.dynamicLocal = false
+	c.reconnectMutex.Unlock()
+}
+
 // IsReconnecting returns true if the client is currently attempting to reconnect
 func (c *Client) IsReconnecting() bool {
 	c.reconnectMutex.RLock()
@@ -185,6 +212,37 @@ func (c *Client) IsClosed() bool {
 	c.closeMutex.RLock()
 	defer c.closeMutex.RUnlock()
 	return c.closed
+}
+
+// triggerReconnect marks the client disconnected and kicks off reconnect if enabled.
+func (c *Client) triggerReconnect(reason error) {
+	if c.IsClosed() {
+		return
+	}
+
+	c.reconnectMutex.RLock()
+	enabled := c.autoReconnect
+	already := c.reconnecting
+	c.reconnectMutex.RUnlock()
+
+	if !enabled || already {
+		return
+	}
+
+	// Mark as disconnected so new operations wait.
+	c.connectedMutex.Lock()
+	c.connected = make(chan struct{})
+	c.connectedMutex.Unlock()
+
+	// Notify plugins of the disconnect reason.
+	if hookErr := c.pm.notifyDisconnected(c, reason); hookErr != nil {
+		select {
+		case c.listenErr <- hookErr:
+		default:
+		}
+	}
+
+	go c.reconnect()
 }
 
 // Close closes the Omron FINS connection
@@ -315,8 +373,12 @@ func (c *Client) reconnect() error {
 			c.conn = nil
 		}
 
+		// Optionally refresh the local bind address (handles interface changes like VPN up/down).
+		c.refreshLocalAddr()
+
 		// Attempt to reconnect
-		conn, err := net.DialUDP("udp", c.localAddr, c.remoteAddr)
+		localAddr := c.getLocalAddr()
+		conn, err := net.DialUDP("udp", localAddr, c.remoteAddr)
 		if err != nil {
 			lastErr = err
 			continue
@@ -328,7 +390,12 @@ func (c *Client) reconnect() error {
 		}
 
 		// Update connection
+		c.localAddrMutex.Lock()
 		c.conn = conn
+		if la, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+			c.localAddr = la
+		}
+		c.localAddrMutex.Unlock()
 
 		// Create new connected channel and close it to signal connection is ready
 		c.connectedMutex.Lock()
@@ -710,7 +777,9 @@ func (c *Client) sendCommand(ctx context.Context, command []byte) (*response, er
 		case resp := <-respChan:
 			return &resp, nil
 		case <-time.After(c.responseTimeoutMs * time.Millisecond):
-			return nil, ResponseTimeoutError{c.responseTimeoutMs}
+			err := ResponseTimeoutError{c.responseTimeoutMs}
+			c.triggerReconnect(err)
+			return nil, err
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-c.done:
@@ -825,4 +894,29 @@ func checkIsBitMemoryArea(memoryArea byte) bool {
 		return true
 	}
 	return false
+}
+
+func (c *Client) refreshLocalAddr() {
+	c.reconnectMutex.RLock()
+	enabled := c.dynamicLocal
+	c.reconnectMutex.RUnlock()
+	if !enabled {
+		return
+	}
+	testConn, err := net.DialUDP("udp", nil, c.remoteAddr)
+	if err != nil {
+		return
+	}
+	if la, ok := testConn.LocalAddr().(*net.UDPAddr); ok {
+		c.localAddrMutex.Lock()
+		c.localAddr = la
+		c.localAddrMutex.Unlock()
+	}
+	testConn.Close()
+}
+
+func (c *Client) getLocalAddr() *net.UDPAddr {
+	c.localAddrMutex.RLock()
+	defer c.localAddrMutex.RUnlock()
+	return c.localAddr
 }

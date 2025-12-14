@@ -18,6 +18,8 @@ type AutoReconnect interface {
 	EnableAutoReconnect(maxRetries int, initialDelay time.Duration)
 	DisableAutoReconnect()
 	IsReconnecting() bool
+	EnableDynamicLocalAddress()
+	DisableDynamicLocalAddress()
 }
 
 // Interceptor/plugin hooks.
