@@ -26,16 +26,20 @@ const (
 )
 
 type output struct {
-	mode  outputMode
-	quiet bool
+	mode      outputMode
+	quiet     bool
+	transport string
 }
 
-func newOutput(mode string, quiet bool) (output, error) {
+func newOutput(mode string, quiet bool, transport string) (output, error) {
+	if transport == "" {
+		transport = "udp"
+	}
 	switch strings.ToLower(mode) {
 	case string(outputText):
-		return output{mode: outputText, quiet: quiet}, nil
+		return output{mode: outputText, quiet: quiet, transport: strings.ToLower(transport)}, nil
 	case string(outputJSON):
-		return output{mode: outputJSON, quiet: quiet}, nil
+		return output{mode: outputJSON, quiet: quiet, transport: strings.ToLower(transport)}, nil
 	default:
 		return output{}, fmt.Errorf("unsupported format %q (use text or json)", mode)
 	}
@@ -71,12 +75,13 @@ func (o output) printWithRTT(label string, v interface{}, rtt time.Duration) err
 	if o.quiet {
 		label = ""
 	}
+	suffix := fmt.Sprintf("(%s %dms)", o.transport, rtt.Milliseconds())
 	switch o.mode {
 	case outputText:
 		if label != "" {
-			fmt.Printf("%s: %v (%dms)\n", label, v, rtt.Milliseconds())
+			fmt.Printf("%s: %v %s\n", label, v, suffix)
 		} else {
-			fmt.Printf("%v (%dms)\n", v, rtt.Milliseconds())
+			fmt.Printf("%v %s\n", v, suffix)
 		}
 		return nil
 	case outputJSON:
@@ -84,8 +89,9 @@ func (o output) printWithRTT(label string, v interface{}, rtt time.Duration) err
 			Label   string      `json:"label,omitempty"`
 			Result  interface{} `json:"result"`
 			RTTMsec int64       `json:"rtt_ms"`
+			Mode    string      `json:"mode"`
 		}
-		w := wrapped{Label: label, Result: v, RTTMsec: rtt.Milliseconds()}
+		w := wrapped{Label: label, Result: v, RTTMsec: rtt.Milliseconds(), Mode: o.transport}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(w)
@@ -112,13 +118,13 @@ func (o output) printError(err error) {
 
 func main() {
 	remoteHost := flag.String("remote-host", "127.0.0.1", "Target PLC host/IP")
-	remotePort := flag.Int("remote-port", 9600, "Target PLC UDP port")
+	remotePort := flag.Int("remote-port", 9600, "Target PLC port")
 	remoteNetwork := flag.Int("remote-network", 0, "Target FINS network number")
 	remoteNode := flag.Int("remote-node", 10, "Target FINS node address")
 	remoteUnit := flag.Int("remote-unit", 0, "Target FINS unit address")
 
 	localHost := flag.String("local-host", "", "Local host/IP to bind (auto-detect if empty)")
-	localPort := flag.Int("local-port", 0, "Local UDP port (0 = auto)")
+	localPort := flag.Int("local-port", 0, "Local port (0 = auto)")
 	localNetwork := flag.Int("local-network", 0, "Local FINS network number")
 	localNode := flag.Int("local-node", 2, "Local FINS node address")
 	localUnit := flag.Int("local-unit", 0, "Local FINS unit address")
@@ -131,11 +137,17 @@ func main() {
 	autoReconnectDelay := flag.Duration("auto-reconnect-delay", time.Second, "Initial delay for auto-reconnect backoff")
 	format := flag.String("format", "text", "Output format: text|json")
 	quiet := flag.Bool("quiet", false, "Quiet output (suppress info, show only command output)")
+	tcp := flag.Bool("tcp", false, "Use FINS over TCP instead of UDP")
 	flag.Parse()
 
 	log.SetFlags(0)
 
-	out, err := newOutput(*format, *quiet)
+	transportMode := "udp"
+	if *tcp {
+		transportMode = "tcp"
+	}
+
+	out, err := newOutput(*format, *quiet, transportMode)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -144,7 +156,7 @@ func main() {
 	}
 
 	// Resolve remote host if a hostname was provided.
-	if host, port, err := resolveHost(*remoteHost, *remotePort); err == nil {
+	if host, port, err := resolveHost(*remoteHost, *remotePort, *tcp); err == nil {
 		*remoteHost = host
 		*remotePort = port
 	} else {
@@ -154,7 +166,7 @@ func main() {
 	remoteEndpoint := fmt.Sprintf("%s:%d", *remoteHost, *remotePort)
 	// Resolve local host if set to a hostname (otherwise leave empty for auto-detect).
 	if *localHost != "" {
-		if host, port, err := resolveHost(*localHost, *localPort); err == nil {
+		if host, port, err := resolveHost(*localHost, *localPort, *tcp); err == nil {
 			*localHost = host
 			*localPort = port
 		} else {
@@ -163,20 +175,31 @@ func main() {
 	}
 
 	if *localHost == "" || *localPort == 0 {
-		if ip, port, err := detectLocalAddr(remoteEndpoint); err == nil {
+		if ip, port, err := detectLocalAddr(remoteEndpoint, *tcp); err == nil {
 			if *localHost == "" && ip != "" {
 				*localHost = ip
 			}
-			if *localPort == 0 && port > 0 {
+			if !*tcp && *localPort == 0 && port > 0 {
 				*localPort = port
 			}
 		}
 	}
 
-	localAddr := fins.NewAddress(*localHost, *localPort, byte(*localNetwork), byte(*localNode), byte(*localUnit))
-	remoteAddr := fins.NewAddress(*remoteHost, *remotePort, byte(*remoteNetwork), byte(*remoteNode), byte(*remoteUnit))
+	var localAddr, remoteAddr fins.Address
+	if *tcp {
+		localAddr = fins.NewTCPAddress(*localHost, *localPort, byte(*localNetwork), byte(*localNode), byte(*localUnit))
+		remoteAddr = fins.NewTCPAddress(*remoteHost, *remotePort, byte(*remoteNetwork), byte(*remoteNode), byte(*remoteUnit))
+	} else {
+		localAddr = fins.NewAddress(*localHost, *localPort, byte(*localNetwork), byte(*localNode), byte(*localUnit))
+		remoteAddr = fins.NewAddress(*remoteHost, *remotePort, byte(*remoteNetwork), byte(*remoteNode), byte(*remoteUnit))
+	}
 
-	client, err := fins.NewUDPClient(localAddr, remoteAddr)
+	var client *fins.Client
+	if *tcp {
+		client, err = fins.NewTCPClient(localAddr, remoteAddr)
+	} else {
+		client, err = fins.NewUDPClient(localAddr, remoteAddr)
+	}
 	if err != nil {
 		log.Fatalf("failed to create client: %v", err)
 	}
@@ -188,9 +211,13 @@ func main() {
 	}
 	defer client.Close()
 
-	log.Printf("Connected to PLC %s (net=%d node=%d unit=%d) from local net=%d node=%d unit=%d",
-		remoteAddr.UdpAddress.String(), remoteAddr.FinAddress.Network, remoteAddr.FinAddress.Node, remoteAddr.FinAddress.Unit,
-		localAddr.FinAddress.Network, localAddr.FinAddress.Node, localAddr.FinAddress.Unit)
+	transport := strings.ToUpper(transportMode)
+	if *tcp {
+		transport = "TCP"
+	}
+	log.Printf("Connected to PLC %s (%s) (net=%d node=%d unit=%d) from local %s (net=%d node=%d unit=%d)",
+		formatAddr(remoteAddr.UdpAddress, remoteAddr.TcpAddress, *tcp), transport, remoteAddr.FinAddress.Network, remoteAddr.FinAddress.Node, remoteAddr.FinAddress.Unit,
+		formatAddr(localAddr.UdpAddress, localAddr.TcpAddress, *tcp), localAddr.FinAddress.Network, localAddr.FinAddress.Node, localAddr.FinAddress.Unit)
 
 	if !out.quiet {
 		printHelp()
@@ -269,9 +296,16 @@ func main() {
 	}
 }
 
-func resolveHost(host string, port int) (string, int, error) {
+func resolveHost(host string, port int, useTCP bool) (string, int, error) {
 	if host == "" || net.ParseIP(host) != nil {
 		return host, port, nil
+	}
+	if useTCP {
+		addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", host, port))
+		if err != nil {
+			return "", 0, err
+		}
+		return addr.IP.String(), addr.Port, nil
 	}
 	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
@@ -280,22 +314,49 @@ func resolveHost(host string, port int) (string, int, error) {
 	return addr.IP.String(), addr.Port, nil
 }
 
-func detectLocalAddr(remote string) (string, int, error) {
-	conn, err := net.DialTimeout("udp", remote, 2*time.Second)
+func detectLocalAddr(remote string, useTCP bool) (string, int, error) {
+	network := "udp"
+	if useTCP {
+		network = "tcp"
+	}
+	conn, err := net.DialTimeout(network, remote, 2*time.Second)
 	if err != nil {
 		return "", 0, err
 	}
 	defer conn.Close()
 
-	udpAddr, ok := conn.LocalAddr().(*net.UDPAddr)
-	if !ok {
+	switch addr := conn.LocalAddr().(type) {
+	case *net.UDPAddr:
+		ip := ""
+		if addr.IP != nil {
+			ip = addr.IP.String()
+		}
+		return ip, addr.Port, nil
+	case *net.TCPAddr:
+		ip := ""
+		if addr.IP != nil {
+			ip = addr.IP.String()
+		}
+		return ip, addr.Port, nil
+	default:
 		return "", 0, fmt.Errorf("unexpected local address type %T", conn.LocalAddr())
 	}
-	ip := ""
-	if udpAddr.IP != nil {
-		ip = udpAddr.IP.String()
+}
+
+func formatAddr(udp *net.UDPAddr, tcp *net.TCPAddr, useTCP bool) string {
+	if useTCP && tcp != nil {
+		return tcp.String()
 	}
-	return ip, udpAddr.Port, nil
+	if !useTCP && udp != nil {
+		return udp.String()
+	}
+	if tcp != nil {
+		return tcp.String()
+	}
+	if udp != nil {
+		return udp.String()
+	}
+	return ""
 }
 
 func handleCommand(ctx context.Context, out output, client *fins.Client, cmd string, args []string) error {

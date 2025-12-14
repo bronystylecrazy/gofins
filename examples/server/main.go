@@ -17,6 +17,7 @@ type program struct {
 	network int
 	node    int
 	unit    int
+	tcp     bool
 	server  *fins.Server
 	logger  service.Logger
 	done    chan struct{}
@@ -34,15 +35,16 @@ func main() {
 	}
 
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	host := fs.String("host", "127.0.0.1", "UDP host to bind the PLC simulator")
-	port := fs.Int("port", 9600, "UDP port for the PLC simulator")
+	host := fs.String("host", "127.0.0.1", "Host/IP to bind the PLC simulator")
+	port := fs.Int("port", 9600, "Port for the PLC simulator")
 	network := fs.Int("network", 0, "FINS network number for the PLC")
 	node := fs.Int("node", 10, "FINS node address for the PLC")
 	unit := fs.Int("unit", 0, "FINS unit address for the PLC")
+	tcp := fs.Bool("tcp", false, "Serve FINS over TCP instead of UDP")
 
 	svcName := fs.String("svc-name", "fins-mock", "Service name")
 	svcDisplay := fs.String("svc-display", "FINS Mock Server", "Service display name")
-	svcDesc := fs.String("svc-desc", "Omron FINS UDP mock server", "Service description")
+	svcDesc := fs.String("svc-desc", "Omron FINS mock server", "Service description")
 	_ = fs.Parse(args)
 
 	prog := &program{
@@ -51,6 +53,7 @@ func main() {
 		network: *network,
 		node:    *node,
 		unit:    *unit,
+		tcp:     *tcp,
 		done:    make(chan struct{}),
 	}
 
@@ -93,7 +96,12 @@ func (p *program) Start(s service.Service) error {
 
 func (p *program) run() {
 	plcAddr := fins.NewAddress(p.host, p.port, byte(p.network), byte(p.node), byte(p.unit))
-	srv, err := fins.NewPLCSimulator(plcAddr)
+	opts := []fins.ServerOption{}
+	if p.tcp {
+		opts = append(opts, fins.WithTCPTransport())
+	}
+
+	srv, err := fins.NewPLCSimulator(plcAddr, opts...)
 	if err != nil {
 		p.logf("failed to start PLC simulator: %v", err)
 		return
@@ -106,7 +114,14 @@ func (p *program) run() {
 		}
 	}()
 
-	p.logf("PLC simulator listening on %s (network=%d node=%d unit=%d)", plcAddr.UdpAddress.String(), plcAddr.FinAddress.Network, plcAddr.FinAddress.Node, plcAddr.FinAddress.Unit)
+	addr := plcAddr.UdpAddress.String()
+	transport := "udp"
+	if p.tcp {
+		addr = plcAddr.TcpAddress.String()
+		transport = "tcp"
+	}
+
+	p.logf("PLC simulator listening on %s (%s) (network=%d node=%d unit=%d)", addr, transport, plcAddr.FinAddress.Network, plcAddr.FinAddress.Node, plcAddr.FinAddress.Unit)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)

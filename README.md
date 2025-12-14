@@ -87,11 +87,12 @@ go run ./examples/server \
 ```
 
 Available flags:
-- `-host` UDP host/IP to bind (default `127.0.0.1`)
-- `-port` UDP port for the PLC simulator (default `9600`)
+- `-host` host/IP to bind (default `127.0.0.1`)
+- `-port` port for the PLC simulator (default `9600`)
 - `-network` FINS network number (default `0`)
 - `-node` FINS node address (default `10`)
 - `-unit` FINS unit address (default `0`)
+- `-tcp` serve FINS over TCP instead of UDP (default `false`)
 
 Install and control the simulator as a service (cross-platform via `github.com/kardianos/service`):
 
@@ -136,6 +137,8 @@ go run ./examples/client \
   -exec "readwords dm 100 3" \
   -exec-interval 500ms
 ``` 
+
+Add `-tcp` to talk FINS/TCP instead of UDP (useful with the simulator's `-tcp` flag).
 
 Once running, try commands such as:
 - `readwords dm 100 3`
