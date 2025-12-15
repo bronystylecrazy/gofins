@@ -67,11 +67,11 @@ func (ic *InlineClient) ReadWords(ctx context.Context, memoryArea byte, address 
 		if err := ic.check(ctx); err != nil {
 			return nil, err
 		}
-		if memoryArea != MemoryAreaDMWord {
+		if !checkIsWordMemoryArea(memoryArea) {
 			return nil, IncompatibleMemoryAreaError{memoryArea}
 		}
 
-		raw, endCode := ic.srv.readDMWords(address, readCount)
+		raw, endCode := ic.srv.readWords(memoryArea, address, readCount)
 		if endCode != EndCodeNormalCompletion {
 			return nil, EndCodeError{EndCode: endCode}
 		}
@@ -101,11 +101,11 @@ func (ic *InlineClient) ReadBytes(ctx context.Context, memoryArea byte, address 
 		if err := ic.check(ctx); err != nil {
 			return nil, err
 		}
-		if memoryArea != MemoryAreaDMWord {
+		if !checkIsWordMemoryArea(memoryArea) {
 			return nil, IncompatibleMemoryAreaError{memoryArea}
 		}
 
-		raw, endCode := ic.srv.readDMWords(address, readCount)
+		raw, endCode := ic.srv.readWords(memoryArea, address, readCount)
 		if endCode != EndCodeNormalCompletion {
 			return nil, EndCodeError{EndCode: endCode}
 		}
@@ -143,11 +143,11 @@ func (ic *InlineClient) ReadBits(ctx context.Context, memoryArea byte, address u
 		if err := ic.check(ctx); err != nil {
 			return nil, err
 		}
-		if memoryArea != MemoryAreaDMBit {
+		if !checkIsBitMemoryArea(memoryArea) {
 			return nil, IncompatibleMemoryAreaError{memoryArea}
 		}
 
-		raw, endCode := ic.srv.readDMBits(address, bitOffset, readCount)
+		raw, endCode := ic.srv.readBits(memoryArea, address, bitOffset, readCount)
 		if endCode != EndCodeNormalCompletion {
 			return nil, EndCodeError{EndCode: endCode}
 		}
@@ -191,7 +191,7 @@ func (ic *InlineClient) WriteWords(ctx context.Context, memoryArea byte, address
 		if err := ic.check(ctx); err != nil {
 			return nil, err
 		}
-		if memoryArea != MemoryAreaDMWord {
+		if !checkIsWordMemoryArea(memoryArea) {
 			return nil, IncompatibleMemoryAreaError{memoryArea}
 		}
 		l := uint16(len(data))
@@ -199,7 +199,7 @@ func (ic *InlineClient) WriteWords(ctx context.Context, memoryArea byte, address
 		for i := 0; i < int(l); i++ {
 			ic.byteOrder.PutUint16(bts[i*2:i*2+2], data[i])
 		}
-		if endCode := ic.srv.writeDMWords(address, l, bts); endCode != EndCodeNormalCompletion {
+		if endCode := ic.srv.writeWords(memoryArea, address, l, bts); endCode != EndCodeNormalCompletion {
 			return nil, EndCodeError{EndCode: endCode}
 		}
 		return nil, nil
@@ -219,12 +219,12 @@ func (ic *InlineClient) WriteString(ctx context.Context, memoryArea byte, addres
 		if err := ic.check(ctx); err != nil {
 			return nil, err
 		}
-		if memoryArea != MemoryAreaDMWord {
+		if !checkIsWordMemoryArea(memoryArea) {
 			return nil, IncompatibleMemoryAreaError{memoryArea}
 		}
 		bts := make([]byte, 2*len(s))
 		copy(bts, s)
-		if endCode := ic.srv.writeDMWords(address, uint16((len(s)+1)/2), bts); endCode != EndCodeNormalCompletion {
+		if endCode := ic.srv.writeWords(memoryArea, address, uint16((len(s)+1)/2), bts); endCode != EndCodeNormalCompletion {
 			return nil, EndCodeError{EndCode: endCode}
 		}
 		return nil, nil
@@ -244,10 +244,10 @@ func (ic *InlineClient) WriteBytes(ctx context.Context, memoryArea byte, address
 		if err := ic.check(ctx); err != nil {
 			return nil, err
 		}
-		if memoryArea != MemoryAreaDMWord {
+		if !checkIsWordMemoryArea(memoryArea) {
 			return nil, IncompatibleMemoryAreaError{memoryArea}
 		}
-		if endCode := ic.srv.writeDMWords(address, uint16(len(b)), b); endCode != EndCodeNormalCompletion {
+		if endCode := ic.srv.writeWords(memoryArea, address, uint16(len(b)), b); endCode != EndCodeNormalCompletion {
 			return nil, EndCodeError{EndCode: endCode}
 		}
 		return nil, nil
@@ -268,7 +268,7 @@ func (ic *InlineClient) WriteBits(ctx context.Context, memoryArea byte, address 
 		if err := ic.check(ctx); err != nil {
 			return nil, err
 		}
-		if memoryArea != MemoryAreaDMBit {
+		if !checkIsBitMemoryArea(memoryArea) {
 			return nil, IncompatibleMemoryAreaError{memoryArea}
 		}
 		l := uint16(len(data))
@@ -280,7 +280,7 @@ func (ic *InlineClient) WriteBits(ctx context.Context, memoryArea byte, address 
 				bts[i] = 0x00
 			}
 		}
-		if endCode := ic.srv.writeDMBits(address, bitOffset, l, bts); endCode != EndCodeNormalCompletion {
+		if endCode := ic.srv.writeBits(memoryArea, address, bitOffset, l, bts); endCode != EndCodeNormalCompletion {
 			return nil, EndCodeError{EndCode: endCode}
 		}
 		return nil, nil
@@ -321,10 +321,10 @@ func (ic *InlineClient) bitTwiddle(ctx context.Context, op OperationType, memory
 		if err := ic.check(ctx); err != nil {
 			return nil, err
 		}
-		if memoryArea != MemoryAreaDMBit {
+		if !checkIsBitMemoryArea(memoryArea) {
 			return nil, IncompatibleMemoryAreaError{memoryArea}
 		}
-		if endCode := ic.srv.writeDMBits(address, bitOffset, 1, []byte{value}); endCode != EndCodeNormalCompletion {
+		if endCode := ic.srv.writeBits(memoryArea, address, bitOffset, 1, []byte{value}); endCode != EndCodeNormalCompletion {
 			return nil, EndCodeError{EndCode: endCode}
 		}
 		return nil, nil

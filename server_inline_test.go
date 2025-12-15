@@ -77,6 +77,13 @@ func TestInlineClientBits(t *testing.T) {
 	bits, err = inline.ReadBits(ctx, MemoryAreaDMBit, 50, 4, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, []bool{false}, bits)
+
+	// Non-DM areas should also work (e.g., WR)
+	err = inline.WriteBits(ctx, MemoryAreaWRBit, 10, 0, []bool{true, true})
+	assert.NoError(t, err)
+	bits, err = inline.ReadBits(ctx, MemoryAreaWRBit, 10, 0, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, []bool{true, true}, bits)
 }
 
 func TestInlineClientContextAndClosed(t *testing.T) {

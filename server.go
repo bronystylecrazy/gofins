@@ -37,6 +37,8 @@ type Server struct {
 	transport  transportKind
 	dmarea     []byte
 	bitdmarea  []byte
+	wordAreas  map[byte][]byte
+	bitAreas   map[byte][]byte
 	memMu      sync.RWMutex
 	closed     bool
 	closeMutex sync.RWMutex
@@ -56,6 +58,20 @@ func NewPLCSimulator(plcAddr Address, opts ...ServerOption) (*Server, error) {
 	s.addr = plcAddr
 	s.dmarea = make([]byte, DM_AREA_SIZE)
 	s.bitdmarea = make([]byte, DM_AREA_SIZE)
+	s.wordAreas = map[byte][]byte{
+		MemoryAreaDMWord:  s.dmarea,
+		MemoryAreaWRWord:  make([]byte, DM_AREA_SIZE),
+		MemoryAreaHRWord:  make([]byte, DM_AREA_SIZE),
+		MemoryAreaARWord:  make([]byte, DM_AREA_SIZE),
+		MemoryAreaCIOWord: make([]byte, DM_AREA_SIZE),
+	}
+	s.bitAreas = map[byte][]byte{
+		MemoryAreaDMBit:  s.bitdmarea,
+		MemoryAreaWRBit:  make([]byte, DM_AREA_SIZE),
+		MemoryAreaHRBit:  make([]byte, DM_AREA_SIZE),
+		MemoryAreaARBit:  make([]byte, DM_AREA_SIZE),
+		MemoryAreaCIOBit: make([]byte, DM_AREA_SIZE),
+	}
 	s.errChan = make(chan error, ERROR_CHANNEL_BUFFER)
 	s.done = make(chan struct{})
 
@@ -121,52 +137,68 @@ func (s *Server) Close() error {
 	return nil
 }
 
-// readDMWords reads word data from the simulator's DM area.
+// readWords reads word data from a supported memory area.
 // Returns EndCodeAddressRangeExceeded if the requested range is invalid.
-func (s *Server) readDMWords(address uint16, count uint16) ([]byte, uint16) {
+func (s *Server) readWords(area byte, address uint16, count uint16) ([]byte, uint16) {
+	buf, ok := s.wordAreas[area]
+	if !ok {
+		return nil, EndCodeNotSupportedByModelVersion
+	}
 	if address+count*2 > DM_AREA_SIZE {
 		return nil, EndCodeAddressRangeExceeded
 	}
 	s.memMu.RLock()
-	data := append([]byte(nil), s.dmarea[address:address+count*2]...)
+	data := append([]byte(nil), buf[address:address+count*2]...)
 	s.memMu.RUnlock()
 	return data, EndCodeNormalCompletion
 }
 
-// writeDMWords writes word data into the simulator's DM area.
+// writeWords writes word data into a supported memory area.
 // Returns EndCodeAddressRangeExceeded if the requested range is invalid.
-func (s *Server) writeDMWords(address uint16, count uint16, payload []byte) uint16 {
+func (s *Server) writeWords(area byte, address uint16, count uint16, payload []byte) uint16 {
+	buf, ok := s.wordAreas[area]
+	if !ok {
+		return EndCodeNotSupportedByModelVersion
+	}
 	if address+count*2 > DM_AREA_SIZE {
 		return EndCodeAddressRangeExceeded
 	}
 	s.memMu.Lock()
-	copy(s.dmarea[address:address+count*2], payload)
+	copy(buf[address:address+count*2], payload)
 	s.memMu.Unlock()
 	return EndCodeNormalCompletion
 }
 
-// readDMBits reads bit data from the simulator's DM area.
+// readBits reads bit data from a supported memory area.
 // Bit offset is applied to the base address.
-func (s *Server) readDMBits(address uint16, bitOffset byte, count uint16) ([]byte, uint16) {
+func (s *Server) readBits(area byte, address uint16, bitOffset byte, count uint16) ([]byte, uint16) {
+	buf, ok := s.bitAreas[area]
+	if !ok {
+		return nil, EndCodeNotSupportedByModelVersion
+	}
 	start := address + uint16(bitOffset)
 	if start+count > DM_AREA_SIZE {
 		return nil, EndCodeAddressRangeExceeded
 	}
 	s.memMu.RLock()
-	data := append([]byte(nil), s.bitdmarea[start:start+count]...)
+	data := append([]byte(nil), buf[start:start+count]...)
 	s.memMu.RUnlock()
 	return data, EndCodeNormalCompletion
 }
 
-// writeDMBits writes bit data into the simulator's DM area.
+// writeBits writes bit data into a supported memory area.
 // Bit offset is applied to the base address.
-func (s *Server) writeDMBits(address uint16, bitOffset byte, count uint16, payload []byte) uint16 {
+func (s *Server) writeBits(area byte, address uint16, bitOffset byte, count uint16, payload []byte) uint16 {
+	buf, ok := s.bitAreas[area]
+	if !ok {
+		return EndCodeNotSupportedByModelVersion
+	}
 	start := address + uint16(bitOffset)
 	if start+count > DM_AREA_SIZE {
 		return EndCodeAddressRangeExceeded
 	}
 	s.memMu.Lock()
-	copy(s.bitdmarea[start:start+count], payload)
+	copy(buf[start:start+count], payload)
 	s.memMu.Unlock()
 	return EndCodeNormalCompletion
 }
@@ -227,20 +259,18 @@ func (s *Server) handler(r request) response {
 		ic := binary.BigEndian.Uint16(r.data[4:6]) // Item count
 
 		switch memAddr.memoryArea {
-		case MemoryAreaDMWord:
+		case MemoryAreaDMWord, MemoryAreaWRWord, MemoryAreaHRWord, MemoryAreaARWord, MemoryAreaCIOWord:
 			if r.commandCode == CommandCodeMemoryAreaRead { // Read command
-				data, endCode = s.readDMWords(memAddr.address, ic)
+				data, endCode = s.readWords(memAddr.memoryArea, memAddr.address, ic)
 			} else { // Write command
-				endCode = s.writeDMWords(memAddr.address, ic, r.data[6:6+ic*2])
+				endCode = s.writeWords(memAddr.memoryArea, memAddr.address, ic, r.data[6:6+ic*2])
 			}
-
-		case MemoryAreaDMBit:
+		case MemoryAreaDMBit, MemoryAreaWRBit, MemoryAreaHRBit, MemoryAreaARBit, MemoryAreaCIOBit:
 			if r.commandCode == CommandCodeMemoryAreaRead { // Read command
-				data, endCode = s.readDMBits(memAddr.address, memAddr.bitOffset, ic)
+				data, endCode = s.readBits(memAddr.memoryArea, memAddr.address, memAddr.bitOffset, ic)
 			} else { // Write command
-				endCode = s.writeDMBits(memAddr.address, memAddr.bitOffset, ic, r.data[6:6+ic])
+				endCode = s.writeBits(memAddr.memoryArea, memAddr.address, memAddr.bitOffset, ic, r.data[6:6+ic])
 			}
-
 		default:
 			endCode = EndCodeNotSupportedByModelVersion
 		}
