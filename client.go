@@ -808,7 +808,7 @@ func checkResponse(r *response, e error) error {
 		return e
 	}
 	if r.endCode != EndCodeNormalCompletion {
-		return fmt.Errorf("error reported by destination, end code 0x%x", r.endCode)
+		return EndCodeError{EndCode: r.endCode}
 	}
 	return nil
 }

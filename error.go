@@ -29,6 +29,15 @@ func (e ClientClosedError) Error() string {
 	return "Client is closed"
 }
 
+// EndCodeError indicates the PLC returned a FINS end code.
+type EndCodeError struct {
+	EndCode uint16
+}
+
+func (e EndCodeError) Error() string {
+	return fmt.Sprintf("destination returned end code 0x%X", e.EndCode)
+}
+
 // Driver errors
 
 type BCDBadDigitError struct {

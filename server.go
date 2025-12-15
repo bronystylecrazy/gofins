@@ -37,6 +37,7 @@ type Server struct {
 	transport  transportKind
 	dmarea     []byte
 	bitdmarea  []byte
+	memMu      sync.RWMutex
 	closed     bool
 	closeMutex sync.RWMutex
 	errChan    chan error
@@ -120,6 +121,62 @@ func (s *Server) Close() error {
 	return nil
 }
 
+// readDMWords reads word data from the simulator's DM area.
+// Returns EndCodeAddressRangeExceeded if the requested range is invalid.
+func (s *Server) readDMWords(address uint16, count uint16) ([]byte, uint16) {
+	if address+count*2 > DM_AREA_SIZE {
+		return nil, EndCodeAddressRangeExceeded
+	}
+	s.memMu.RLock()
+	data := append([]byte(nil), s.dmarea[address:address+count*2]...)
+	s.memMu.RUnlock()
+	return data, EndCodeNormalCompletion
+}
+
+// writeDMWords writes word data into the simulator's DM area.
+// Returns EndCodeAddressRangeExceeded if the requested range is invalid.
+func (s *Server) writeDMWords(address uint16, count uint16, payload []byte) uint16 {
+	if address+count*2 > DM_AREA_SIZE {
+		return EndCodeAddressRangeExceeded
+	}
+	s.memMu.Lock()
+	copy(s.dmarea[address:address+count*2], payload)
+	s.memMu.Unlock()
+	return EndCodeNormalCompletion
+}
+
+// readDMBits reads bit data from the simulator's DM area.
+// Bit offset is applied to the base address.
+func (s *Server) readDMBits(address uint16, bitOffset byte, count uint16) ([]byte, uint16) {
+	start := address + uint16(bitOffset)
+	if start+count > DM_AREA_SIZE {
+		return nil, EndCodeAddressRangeExceeded
+	}
+	s.memMu.RLock()
+	data := append([]byte(nil), s.bitdmarea[start:start+count]...)
+	s.memMu.RUnlock()
+	return data, EndCodeNormalCompletion
+}
+
+// writeDMBits writes bit data into the simulator's DM area.
+// Bit offset is applied to the base address.
+func (s *Server) writeDMBits(address uint16, bitOffset byte, count uint16, payload []byte) uint16 {
+	start := address + uint16(bitOffset)
+	if start+count > DM_AREA_SIZE {
+		return EndCodeAddressRangeExceeded
+	}
+	s.memMu.Lock()
+	copy(s.bitdmarea[start:start+count], payload)
+	s.memMu.Unlock()
+	return EndCodeNormalCompletion
+}
+
+// InlineClient returns a lightweight, in-process client for manipulating the simulator memory directly.
+// Useful for tests or embedding where sending network frames is unnecessary.
+func (s *Server) InlineClient() *InlineClient {
+	return &InlineClient{srv: s, byteOrder: binary.BigEndian}
+}
+
 func (s *Server) udpLoop() {
 	defer close(s.errChan)
 
@@ -171,31 +228,18 @@ func (s *Server) handler(r request) response {
 
 		switch memAddr.memoryArea {
 		case MemoryAreaDMWord:
-
-			if memAddr.address+ic*2 > DM_AREA_SIZE { // Check address boundary
-				endCode = EndCodeAddressRangeExceeded
-				break
-			}
-
 			if r.commandCode == CommandCodeMemoryAreaRead { // Read command
-				data = s.dmarea[memAddr.address : memAddr.address+ic*2]
+				data, endCode = s.readDMWords(memAddr.address, ic)
 			} else { // Write command
-				copy(s.dmarea[memAddr.address:memAddr.address+ic*2], r.data[6:6+ic*2])
+				endCode = s.writeDMWords(memAddr.address, ic, r.data[6:6+ic*2])
 			}
-			endCode = EndCodeNormalCompletion
 
 		case MemoryAreaDMBit:
-			if memAddr.address+ic > DM_AREA_SIZE { // Check address boundary
-				endCode = EndCodeAddressRangeExceeded
-				break
-			}
-			start := memAddr.address + uint16(memAddr.bitOffset)
 			if r.commandCode == CommandCodeMemoryAreaRead { // Read command
-				data = s.bitdmarea[start : start+ic]
+				data, endCode = s.readDMBits(memAddr.address, memAddr.bitOffset, ic)
 			} else { // Write command
-				copy(s.bitdmarea[start:start+ic], r.data[6:6+ic])
+				endCode = s.writeDMBits(memAddr.address, memAddr.bitOffset, ic, r.data[6:6+ic])
 			}
-			endCode = EndCodeNormalCompletion
 
 		default:
 			endCode = EndCodeNotSupportedByModelVersion

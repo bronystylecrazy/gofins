@@ -2,6 +2,13 @@
 
 This is an improved version of [gofins](https://github.com/l1va/gofins) with critical bug fixes, context support, and various enhancements that make it production-ready.
 
+## Features
+- Production-ready Omron FINS client with context support, byte-order control, and auto-reconnect
+- Built-in PLC simulator (UDP/TCP) plus an in-process inline client for zero-network tests
+- Interceptors and plugin hooks for logging, metrics, tracing, validation, and retries
+- Graceful shutdown, error channels instead of process exits, and comprehensive tests
+- Helpers for reading/writing words, bytes, bits, strings, and PLC clock
+
 ## Installation
 
 ```bash
@@ -93,6 +100,19 @@ Available flags:
 - `-node` FINS node address (default `10`)
 - `-unit` FINS unit address (default `0`)
 - `-tcp` serve FINS over TCP instead of UDP (default `false`)
+
+For in-process tests or tools that just need the simulator's memory without network I/O, use the inline client:
+
+```go
+plcAddr := fins.NewAddress("127.0.0.1", 9600, 0, 10, 0)
+sim, _ := fins.NewPLCSimulator(plcAddr)
+defer sim.Close()
+
+inline := sim.InlineClient()
+inline.WriteWords(context.Background(), fins.MemoryAreaDMWord, 100, []uint16{1, 2, 3})
+data, _ := inline.ReadWords(context.Background(), fins.MemoryAreaDMWord, 100, 3)
+```
+The inline client implements the same `FINSClient` interface but operates directly on simulator memory.
 
 Install and control the simulator as a service (cross-platform via `github.com/kardianos/service`):
 
