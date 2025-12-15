@@ -112,7 +112,7 @@ inline := sim.InlineClient()
 inline.WriteWords(context.Background(), fins.MemoryAreaDMWord, 100, []uint16{1, 2, 3})
 data, _ := inline.ReadWords(context.Background(), fins.MemoryAreaDMWord, 100, 3)
 ```
-The inline client implements the same `FINSClient` interface but operates directly on simulator memory.
+The inline client implements the same `FINSClient` interface but operates directly on simulator memory; interceptors work, but plugins are only available on the networked client.
 
 Install and control the simulator as a service (cross-platform via `github.com/kardianos/service`):
 

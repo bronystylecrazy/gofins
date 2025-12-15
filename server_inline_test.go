@@ -120,3 +120,28 @@ func TestInlineClientEndCodeError(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, EndCodeAddressRangeExceeded, endErr.EndCode)
 }
+
+func TestInlineClientInterceptorAndPluginError(t *testing.T) {
+	_, plcAddr := getTestAddresses(t)
+
+	sim, err := NewPLCSimulator(plcAddr)
+	assert.NoError(t, err)
+	defer sim.Close()
+
+	inline := sim.InlineClient()
+
+	// Plugins should clearly error (inline does not host *Client plugins)
+	err = inline.Use(&mockPlugin{name: "noop"})
+	assert.Error(t, err)
+
+	// Interceptor should run
+	called := false
+	inline.SetInterceptor(func(ic *InterceptorCtx) (interface{}, error) {
+		called = true
+		return ic.Invoke(nil)
+	})
+
+	err = inline.WriteWords(context.Background(), MemoryAreaDMWord, 10, []uint16{1})
+	assert.NoError(t, err)
+	assert.True(t, called)
+}

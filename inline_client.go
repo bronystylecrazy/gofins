@@ -4,14 +4,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
+	"sync"
 	"time"
 )
 
 // InlineClient exposes a client-like API that operates directly on a Server's memory.
 // It bypasses network transport while keeping the same method signatures as Client.
 type InlineClient struct {
-	srv       *Server
-	byteOrder binary.ByteOrder
+	srv              *Server
+	byteOrder        binary.ByteOrder
+	interceptor      Interceptor
+	interceptorMutex sync.RWMutex
 }
 
 // Inline client implements FINSClient (no-op reconnect/hooks).
@@ -32,8 +36,17 @@ func (*InlineClient) IsReconnecting() bool                   { return false }
 func (*InlineClient) EnableDynamicLocalAddress()             {}
 func (*InlineClient) DisableDynamicLocalAddress()            {}
 
-func (*InlineClient) SetInterceptor(Interceptor) {}
-func (*InlineClient) Use(...Plugin) error        { return nil }
+// SetInterceptor installs an interceptor for inline operations.
+func (ic *InlineClient) SetInterceptor(interceptor Interceptor) {
+	ic.interceptorMutex.Lock()
+	ic.interceptor = interceptor
+	ic.interceptorMutex.Unlock()
+}
+
+// Use returns an explicit error because plugins are tightly coupled to *Client.
+func (*InlineClient) Use(...Plugin) error {
+	return errors.New("plugins are not supported by InlineClient; use SetInterceptor instead")
+}
 
 func (ic *InlineClient) IsClosed() bool {
 	return ic.srv.IsClosed()
@@ -43,38 +56,66 @@ func (*InlineClient) Close() error    { return nil }
 func (*InlineClient) Shutdown() error { return nil }
 
 func (ic *InlineClient) ReadWords(ctx context.Context, memoryArea byte, address uint16, readCount uint16) ([]uint16, error) {
-	if err := ic.check(ctx); err != nil {
+	info := &InterceptorInfo{
+		Operation:  OpReadWords,
+		MemoryArea: memoryArea,
+		Address:    address,
+		Count:      readCount,
+	}
+
+	result, err := ic.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		if err := ic.check(ctx); err != nil {
+			return nil, err
+		}
+		if memoryArea != MemoryAreaDMWord {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+
+		raw, endCode := ic.srv.readDMWords(address, readCount)
+		if endCode != EndCodeNormalCompletion {
+			return nil, EndCodeError{EndCode: endCode}
+		}
+
+		data := make([]uint16, readCount)
+		for i := 0; i < int(readCount); i++ {
+			data[i] = ic.byteOrder.Uint16(raw[i*2 : i*2+2])
+		}
+		return data, nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
-	if memoryArea != MemoryAreaDMWord {
-		return nil, IncompatibleMemoryAreaError{memoryArea}
-	}
-
-	raw, endCode := ic.srv.readDMWords(address, readCount)
-	if endCode != EndCodeNormalCompletion {
-		return nil, EndCodeError{EndCode: endCode}
-	}
-
-	data := make([]uint16, readCount)
-	for i := 0; i < int(readCount); i++ {
-		data[i] = ic.byteOrder.Uint16(raw[i*2 : i*2+2])
-	}
-	return data, nil
+	return result.([]uint16), nil
 }
 
 func (ic *InlineClient) ReadBytes(ctx context.Context, memoryArea byte, address uint16, readCount uint16) ([]byte, error) {
-	if err := ic.check(ctx); err != nil {
-		return nil, err
-	}
-	if memoryArea != MemoryAreaDMWord {
-		return nil, IncompatibleMemoryAreaError{memoryArea}
+	info := &InterceptorInfo{
+		Operation:  OpReadBytes,
+		MemoryArea: memoryArea,
+		Address:    address,
+		Count:      readCount,
 	}
 
-	raw, endCode := ic.srv.readDMWords(address, readCount)
-	if endCode != EndCodeNormalCompletion {
-		return nil, EndCodeError{EndCode: endCode}
+	result, err := ic.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		if err := ic.check(ctx); err != nil {
+			return nil, err
+		}
+		if memoryArea != MemoryAreaDMWord {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+
+		raw, endCode := ic.srv.readDMWords(address, readCount)
+		if endCode != EndCodeNormalCompletion {
+			return nil, EndCodeError{EndCode: endCode}
+		}
+		return raw, nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
-	return raw, nil
+	return result.([]byte), nil
 }
 
 func (ic *InlineClient) ReadString(ctx context.Context, memoryArea byte, address uint16, readCount uint16) (string, error) {
@@ -90,106 +131,169 @@ func (ic *InlineClient) ReadString(ctx context.Context, memoryArea byte, address
 }
 
 func (ic *InlineClient) ReadBits(ctx context.Context, memoryArea byte, address uint16, bitOffset byte, readCount uint16) ([]bool, error) {
-	if err := ic.check(ctx); err != nil {
-		return nil, err
-	}
-	if memoryArea != MemoryAreaDMBit {
-		return nil, IncompatibleMemoryAreaError{memoryArea}
+	info := &InterceptorInfo{
+		Operation:  OpReadBits,
+		MemoryArea: memoryArea,
+		Address:    address,
+		BitOffset:  bitOffset,
+		Count:      readCount,
 	}
 
-	raw, endCode := ic.srv.readDMBits(address, bitOffset, readCount)
-	if endCode != EndCodeNormalCompletion {
-		return nil, EndCodeError{EndCode: endCode}
+	result, err := ic.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		if err := ic.check(ctx); err != nil {
+			return nil, err
+		}
+		if memoryArea != MemoryAreaDMBit {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+
+		raw, endCode := ic.srv.readDMBits(address, bitOffset, readCount)
+		if endCode != EndCodeNormalCompletion {
+			return nil, EndCodeError{EndCode: endCode}
+		}
+		bools := make([]bool, readCount)
+		for i := range raw {
+			bools[i] = raw[i]&0x01 > 0
+		}
+		return bools, nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
-	bools := make([]bool, readCount)
-	for i := range raw {
-		bools[i] = raw[i]&0x01 > 0
-	}
-	return bools, nil
+	return result.([]bool), nil
 }
 
 func (ic *InlineClient) ReadClock(ctx context.Context) (*time.Time, error) {
-	if err := ic.check(ctx); err != nil {
+	info := &InterceptorInfo{Operation: OpReadClock}
+	result, err := ic.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		if err := ic.check(ctx); err != nil {
+			return nil, err
+		}
+		now := time.Now()
+		return &now, nil
+	})
+	if err != nil {
 		return nil, err
 	}
-	now := time.Now()
-	return &now, nil
+	return result.(*time.Time), nil
 }
 
 func (ic *InlineClient) WriteWords(ctx context.Context, memoryArea byte, address uint16, data []uint16) error {
-	if err := ic.check(ctx); err != nil {
-		return err
+	info := &InterceptorInfo{
+		Operation:  OpWriteWords,
+		MemoryArea: memoryArea,
+		Address:    address,
+		Data:       data,
 	}
-	if memoryArea != MemoryAreaDMWord {
-		return IncompatibleMemoryAreaError{memoryArea}
-	}
-	l := uint16(len(data))
-	bts := make([]byte, 2*l)
-	for i := 0; i < int(l); i++ {
-		ic.byteOrder.PutUint16(bts[i*2:i*2+2], data[i])
-	}
-	if endCode := ic.srv.writeDMWords(address, l, bts); endCode != EndCodeNormalCompletion {
-		return EndCodeError{EndCode: endCode}
-	}
-	return nil
+
+	_, err := ic.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		if err := ic.check(ctx); err != nil {
+			return nil, err
+		}
+		if memoryArea != MemoryAreaDMWord {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+		l := uint16(len(data))
+		bts := make([]byte, 2*l)
+		for i := 0; i < int(l); i++ {
+			ic.byteOrder.PutUint16(bts[i*2:i*2+2], data[i])
+		}
+		if endCode := ic.srv.writeDMWords(address, l, bts); endCode != EndCodeNormalCompletion {
+			return nil, EndCodeError{EndCode: endCode}
+		}
+		return nil, nil
+	})
+	return err
 }
 
 func (ic *InlineClient) WriteString(ctx context.Context, memoryArea byte, address uint16, s string) error {
-	if err := ic.check(ctx); err != nil {
-		return err
+	info := &InterceptorInfo{
+		Operation:  OpWriteString,
+		MemoryArea: memoryArea,
+		Address:    address,
+		Data:       s,
 	}
-	if memoryArea != MemoryAreaDMWord {
-		return IncompatibleMemoryAreaError{memoryArea}
-	}
-	bts := make([]byte, 2*len(s))
-	copy(bts, s)
-	if endCode := ic.srv.writeDMWords(address, uint16((len(s)+1)/2), bts); endCode != EndCodeNormalCompletion {
-		return EndCodeError{EndCode: endCode}
-	}
-	return nil
+
+	_, err := ic.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		if err := ic.check(ctx); err != nil {
+			return nil, err
+		}
+		if memoryArea != MemoryAreaDMWord {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+		bts := make([]byte, 2*len(s))
+		copy(bts, s)
+		if endCode := ic.srv.writeDMWords(address, uint16((len(s)+1)/2), bts); endCode != EndCodeNormalCompletion {
+			return nil, EndCodeError{EndCode: endCode}
+		}
+		return nil, nil
+	})
+	return err
 }
 
 func (ic *InlineClient) WriteBytes(ctx context.Context, memoryArea byte, address uint16, b []byte) error {
-	if err := ic.check(ctx); err != nil {
-		return err
+	info := &InterceptorInfo{
+		Operation:  OpWriteBytes,
+		MemoryArea: memoryArea,
+		Address:    address,
+		Data:       b,
 	}
-	if memoryArea != MemoryAreaDMWord {
-		return IncompatibleMemoryAreaError{memoryArea}
-	}
-	if endCode := ic.srv.writeDMWords(address, uint16(len(b)), b); endCode != EndCodeNormalCompletion {
-		return EndCodeError{EndCode: endCode}
-	}
-	return nil
+
+	_, err := ic.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		if err := ic.check(ctx); err != nil {
+			return nil, err
+		}
+		if memoryArea != MemoryAreaDMWord {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+		if endCode := ic.srv.writeDMWords(address, uint16(len(b)), b); endCode != EndCodeNormalCompletion {
+			return nil, EndCodeError{EndCode: endCode}
+		}
+		return nil, nil
+	})
+	return err
 }
 
 func (ic *InlineClient) WriteBits(ctx context.Context, memoryArea byte, address uint16, bitOffset byte, data []bool) error {
-	if err := ic.check(ctx); err != nil {
-		return err
+	info := &InterceptorInfo{
+		Operation:  OpWriteBits,
+		MemoryArea: memoryArea,
+		Address:    address,
+		BitOffset:  bitOffset,
+		Data:       data,
 	}
-	if memoryArea != MemoryAreaDMBit {
-		return IncompatibleMemoryAreaError{memoryArea}
-	}
-	l := uint16(len(data))
-	bts := make([]byte, l)
-	for i := 0; i < int(l); i++ {
-		if data[i] {
-			bts[i] = 0x01
-		} else {
-			bts[i] = 0x00
+
+	_, err := ic.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		if err := ic.check(ctx); err != nil {
+			return nil, err
 		}
-	}
-	if endCode := ic.srv.writeDMBits(address, bitOffset, l, bts); endCode != EndCodeNormalCompletion {
-		return EndCodeError{EndCode: endCode}
-	}
-	return nil
+		if memoryArea != MemoryAreaDMBit {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+		l := uint16(len(data))
+		bts := make([]byte, l)
+		for i := 0; i < int(l); i++ {
+			if data[i] {
+				bts[i] = 0x01
+			} else {
+				bts[i] = 0x00
+			}
+		}
+		if endCode := ic.srv.writeDMBits(address, bitOffset, l, bts); endCode != EndCodeNormalCompletion {
+			return nil, EndCodeError{EndCode: endCode}
+		}
+		return nil, nil
+	})
+	return err
 }
 
 func (ic *InlineClient) SetBit(ctx context.Context, memoryArea byte, address uint16, bitOffset byte) error {
-	return ic.bitTwiddle(ctx, memoryArea, address, bitOffset, 0x01)
+	return ic.bitTwiddle(ctx, OpSetBit, memoryArea, address, bitOffset, 0x01)
 }
 
 func (ic *InlineClient) ResetBit(ctx context.Context, memoryArea byte, address uint16, bitOffset byte) error {
-	return ic.bitTwiddle(ctx, memoryArea, address, bitOffset, 0x00)
+	return ic.bitTwiddle(ctx, OpResetBit, memoryArea, address, bitOffset, 0x00)
 }
 
 func (ic *InlineClient) ToggleBit(ctx context.Context, memoryArea byte, address uint16, bitOffset byte) error {
@@ -201,20 +305,31 @@ func (ic *InlineClient) ToggleBit(ctx context.Context, memoryArea byte, address 
 	if b[0] {
 		val = 0x00
 	}
-	return ic.bitTwiddle(ctx, memoryArea, address, bitOffset, val)
+	return ic.bitTwiddle(ctx, OpToggleBit, memoryArea, address, bitOffset, val)
 }
 
-func (ic *InlineClient) bitTwiddle(ctx context.Context, memoryArea byte, address uint16, bitOffset byte, value byte) error {
-	if err := ic.check(ctx); err != nil {
-		return err
+func (ic *InlineClient) bitTwiddle(ctx context.Context, op OperationType, memoryArea byte, address uint16, bitOffset byte, value byte) error {
+	info := &InterceptorInfo{
+		Operation:  op,
+		MemoryArea: memoryArea,
+		Address:    address,
+		BitOffset:  bitOffset,
+		Data:       []bool{value == 0x01},
 	}
-	if memoryArea != MemoryAreaDMBit {
-		return IncompatibleMemoryAreaError{memoryArea}
-	}
-	if endCode := ic.srv.writeDMBits(address, bitOffset, 1, []byte{value}); endCode != EndCodeNormalCompletion {
-		return EndCodeError{EndCode: endCode}
-	}
-	return nil
+
+	_, err := ic.invoke(ctx, info, func(ctx context.Context) (interface{}, error) {
+		if err := ic.check(ctx); err != nil {
+			return nil, err
+		}
+		if memoryArea != MemoryAreaDMBit {
+			return nil, IncompatibleMemoryAreaError{memoryArea}
+		}
+		if endCode := ic.srv.writeDMBits(address, bitOffset, 1, []byte{value}); endCode != EndCodeNormalCompletion {
+			return nil, EndCodeError{EndCode: endCode}
+		}
+		return nil, nil
+	})
+	return err
 }
 
 func (ic *InlineClient) check(ctx context.Context) error {
@@ -227,4 +342,20 @@ func (ic *InlineClient) check(ctx context.Context) error {
 		return ClientClosedError{}
 	}
 	return nil
+}
+
+func (ic *InlineClient) invoke(ctx context.Context, info *InterceptorInfo, invoker Invoker) (interface{}, error) {
+	ic.interceptorMutex.RLock()
+	interceptor := ic.interceptor
+	ic.interceptorMutex.RUnlock()
+
+	if interceptor != nil {
+		return interceptor(&InterceptorCtx{
+			ctx:     ctx,
+			info:    info,
+			invoker: invoker,
+		})
+	}
+
+	return invoker(ctx)
 }
